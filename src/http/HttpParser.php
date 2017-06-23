@@ -201,9 +201,8 @@ class HttpParser extends EventEmitter
         $this->bodyReceiver->feed($body);
     }
 
-    protected function checkSkipBody(Request $request)
+    protected function checkSkipBody(ServerRequest $request)
     {
-
         return in_array($request->getOriginalMethod(), ['GET', 'HEAD', 'OPTIONS']) || $request->hasHeader('Upgrade');
     }
 
@@ -257,7 +256,7 @@ class HttpParser extends EventEmitter
                 throw new HttpException(400, 'The value of `Content-Length` is not valid');
             }
 
-            return new LengthLimitedBuffer($contentLength);
+            return new LengthLimitedBuffer($request->getBody(), $contentLength);
         }
 
         throw new HttpException(417, "Expectation failed");

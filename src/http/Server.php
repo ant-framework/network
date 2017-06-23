@@ -5,6 +5,7 @@ use Evenement\EventEmitter;
 use React\Socket\ServerInterface;
 use React\EventLoop\LoopInterface;
 use React\Socket\ConnectionInterface;
+use Psr\Http\Message\ServerRequestInterface;
 
 /**
  * Todo 在指定时间内没有完成传输,响应超时,并清空缓冲区数据
@@ -65,13 +66,13 @@ class Server extends EventEmitter
         // Todo 响应超时,客户端主动断开连接,不再写入
         $this->emit('connection', [$socket]);
 
-        $buffer = new RequestBuffer(
+        $buffer = new HttpParser(
             $socket,
             $this->options['maxHeaderSize'],
             $this->options['maxBodySize']
         );
 
-        $buffer->on('data', function (Request $request) use ($socket) {
+        $buffer->on('data', function (ServerRequestInterface $request) use ($socket) {
             $this->handleRequest($request, $socket);
         });
 
@@ -85,7 +86,7 @@ class Server extends EventEmitter
         });
     }
 
-    public function handleRequest(Request $request, ConnectionInterface $socket)
+    public function handleRequest(ServerRequestInterface $request, ConnectionInterface $socket)
     {
         $response = Response::prepare($socket, $request);
         // Todo 协议升级事件
