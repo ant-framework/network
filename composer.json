@@ -1,0 +1,23 @@
+{
+  "require": {
+    "react/cache": "*",
+    "react/child-process": "*",
+    "react/dns": "*",
+    "react/event-loop": "*",
+    "react/http-client": "*",
+    "react/http": "*",
+    "react/promise": "*",
+    "react/socket-client": "*",
+    "react/socket": "*",
+    "react/stream": "*",
+    "ant-framework/support": "*",
+    "ant-framework/http": "dev-master",
+    "ant-framework/coroutine": "dev-master"
+  },
+  "autoload": {
+    "psr-4": {
+      "Ant\\Network\\JsonRpc\\": "./src/json-rpc",
+      "Ant\\Network\\Http\\": "./src/http"
+    }
+  }
+}
