@@ -8,7 +8,7 @@ include "vendor/autoload.php";
 $loop = \React\EventLoop\Factory::create();
 
 \Ant\Coroutine\GlobalLoop::setLoop($loop);
-//
+
 //$socket = new \React\Socket\Server("tcp://0.0.0.0:8080", $loop);
 //
 //$http = new \React\Http\Server(function (\Psr\Http\Message\RequestInterface $request) {
@@ -25,6 +25,8 @@ $loop = \React\EventLoop\Factory::create();
 //});
 //
 //$http->listen($socket);
+//
+//$loop->run();
 
 $server = \Ant\Network\Http\Server::create("tcp://0.0.0.0:8080", $loop, [], [
     'maxHeaderSize' =>  4096,
@@ -40,12 +42,12 @@ $server->on('connection', function (\React\Socket\ConnectionInterface $conn) {
 });
 
 // 请求抵达,先将数据写入内存中,响应结束时将数据写入socket缓冲区等待写入,可以写入后,从缓冲区写入到客户端
-
+//
 // 写入数据,先写入缓冲区,缓冲区等待到流可写,开始写入,所以时同步写入,异步操作
 // 利用协程完成,完成方式类似,先写入到匿名函数内,等待匿名函数被可写事件触发时写入,真正的写入到流后才会运行后续代码
 // 差距,如果是希望写入完成且成功时,在执行后续代码时,缓冲区是无法完成的,因为写入缓冲区并不是真正的写入到流内
 // Todo 异步,协程,缓冲区
-$server->on('request', function (\Ant\Network\Http\Request $request, \Ant\Network\Http\Response $response) {
+$server->on('request', function (\Ant\Http\ServerRequest $request, \Ant\Network\Http\Response $response) {
     if ($request->getOriginalMethod() == 'OPTIONS') {
         $response->withHeaders([
             'Access-Control-Allow-Methods' => 'GET,POST,PATCH,DELETE,PUT,HEAD,OPTIONS',
@@ -62,11 +64,11 @@ $server->on('request', function (\Ant\Network\Http\Request $request, \Ant\Networ
         'Content-Type'  => 'application/json',
     ]);
 
-    $response->setCookie('foo', 'bar');
+//    $response->setCookie('foo', 'bar');
 
-//    $response->getBody()->write("Hello World");
+    $response->getBody()->write(json_encode($request->getHeaders()));
 
-    $response->end("Hello World");
+    $response->end();
 });
 
 $server->on('error', function (\Exception $e, \React\Socket\ConnectionInterface $socket) {

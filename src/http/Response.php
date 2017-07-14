@@ -36,20 +36,6 @@ class Response extends \Ant\Http\Response
     protected $writable = true;
 
     /**
-     * 头部是否写入
-     *
-     * @var bool
-     */
-    protected $headWritten = false;
-
-    /**
-     * 是否启用分块传输
-     *
-     * @var bool
-     */
-    protected $chunkedEncoding = false;
-
-    /**
      * 不保持不变性
      *
      * @var bool
@@ -122,7 +108,7 @@ class Response extends \Ant\Http\Response
             $this->headers['Date'] = [gmdate('D, d M Y H:i:s') . ' GMT'];
         }
 
-        if (!$this->hasHeader("content-length")) {
+        if ($this->body instanceof StreamingBody) {
             $this->headers['Transfer-Encoding'] = ['chunked'];
             $this->chunkedEncoding = true;
         }
@@ -134,67 +120,6 @@ class Response extends \Ant\Http\Response
         return parent::headerToString();
     }
 
-    public function isWritable()
-    {
-        return $this->writable;
-    }
-
-    public function writeContinue()
-    {
-        if (!$this->writable) {
-            return;
-        }
-        if ($this->protocolVersion !== '1.1') {
-            throw new \Exception('Continue requires a HTTP/1.1 message');
-        }
-        if ($this->headWritten) {
-            throw new \Exception('Response head has already been written.');
-        }
-
-        $this->output->write("HTTP/1.1 100 Continue\r\n\r\n");
-    }
-
-    public function writeHead()
-    {
-        if (!$this->writable) {
-            return;
-        }
-        if ($this->headWritten) {
-            throw new \Exception('Response head has already been written.');
-        }
-
-        $data = $this->headerToString();
-
-        $this->output->write("{$data}\r\n");
-
-        $this->headWritten = true;
-    }
-
-
-    public function write($data)
-    {
-        if (!$this->writable) {
-            return false;
-        }
-        if (!$this->headWritten) {
-            $this->writeHead();
-        }
-
-        // prefix with chunk length for chunked transfer encoding
-        if ($this->chunkedEncoding) {
-            $len = strlen($data);
-
-            // skip empty chunks
-            if ($len === 0) {
-                return true;
-            }
-
-            $data = dechex($len) . "\r\n" . $data . "\r\n";
-        }
-
-        return $this->output->write($data);
-    }
-
     public function end($data = null)
     {
         if (!$this->writable) {
@@ -202,24 +127,16 @@ class Response extends \Ant\Http\Response
         }
 
         if (null !== $data) {
-            $this->write($data);
+            $this->getBody()->write($data);
         }
 
-        if ($this->chunkedEncoding) {
-            $this->output->write("0\r\n\r\n");
+        if ($this->body instanceof StreamingBody) {
+            $this->body->end();
+        } else {
+            $this->output->write((string) $this);
         }
 
         $this->writable = false;
     }
 
-    public function close()
-    {
-        if ($this->closed) {
-            return;
-        }
-
-        $this->closed = true;
-        $this->writable = false;
-        $this->output->close();
-    }
 }

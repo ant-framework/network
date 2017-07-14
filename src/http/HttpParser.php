@@ -1,6 +1,7 @@
 <?php
 namespace Ant\Network\Http;
 
+use Ant\Http\CliServerRequest;
 use React\Stream\Util;
 use Evenement\EventEmitter;
 use Ant\Http\ServerRequest;
@@ -27,7 +28,7 @@ class HttpParser extends EventEmitter
     /**
      * @var ConnectionInterface
      */
-    protected $stream;
+    protected $input;
 
     /**
      * @var string
@@ -60,22 +61,22 @@ class HttpParser extends EventEmitter
     protected $maxBodySize;
 
     /**
-     * @param ConnectionInterface $stream
+     * @param ConnectionInterface $input
      * @param int $maxHeaderSize
      * @param int $maxBodySize
      */
     public function __construct(
-        ConnectionInterface $stream,
+        ConnectionInterface $input,
         $maxHeaderSize = 4096,
         $maxBodySize = 65535
     ) {
-        $this->stream = $stream;
+        $this->input = $input;
         $this->maxHeaderSize = $maxHeaderSize;
         $this->maxBodySize = $maxBodySize;
 
-        $this->stream->on('data', [$this, 'handleData']);
-        $this->stream->on('error', [$this, 'handleError']);
-        $this->stream->on('close', [$this, 'handleClose']);
+        $this->input->on('data', [$this, 'handleData']);
+        $this->input->on('error', [$this, 'handleError']);
+        $this->input->on('close', [$this, 'handleClose']);
     }
 
     /**
@@ -89,7 +90,7 @@ class HttpParser extends EventEmitter
 
         $this->clear();
         $this->closed = true;
-        $this->stream->close();
+        $this->input->close();
 
         $this->emit('close');
         $this->removeAllListeners();
@@ -137,7 +138,7 @@ class HttpParser extends EventEmitter
     public function handleError($exception)
     {
         // 不在接收数据
-        $this->stream->removeListener('data', [$this, 'handleData']);
+        $this->input->removeListener('data', [$this, 'handleData']);
         $this->emit('error', [$exception, $this]);
         $this->clear();
     }
@@ -165,7 +166,7 @@ class HttpParser extends EventEmitter
 
         $this->buffer = '';
 
-        $request = Request::createFromString($headers, $this->createServerParams());
+        $request = CliServerRequest::createFromString($headers, $this->createServerParams());
 
         $this->emit('header', [$request]);
 
@@ -175,28 +176,25 @@ class HttpParser extends EventEmitter
             return;
         }
 
-        $this->bodyReceiver = $this->createBodyReceiver($request);
+        $bodyReceiver = $this->createBodyReceiver($request);
 
-        $this->bodyReceiver->on('data', function ($data) use ($request) {
-            $request->getBody()->write($data);
-
-            // Todo 遵循半双工工作流程
-            // Todo 先接收完,在响应错误信息,设置一个不给予响应大小,超过大小直接断开连接
+        $bodyReceiver->on('complete', function () use ($request) {
+            // Todo 超大Body将不完全接收,直接断开连接
             if ($request->getBody()->getSize() > $this->maxBodySize) {
                 throw new HttpException(
                     413, "Maximum body size of {$this->maxBodySize} exceeded."
                 );
             }
-        });
 
-        $this->bodyReceiver->on('end', function () use ($request) {
             $this->emit('data', [$request]);
             $this->clear();
         });
 
-        $this->bodyReceiver->on('error', function ($error) {
+        $bodyReceiver->on('error', function ($error) {
             $this->emit('error', array($error));
         });
+
+        $this->bodyReceiver = $bodyReceiver;
 
         $this->bodyReceiver->feed($body);
     }
@@ -216,11 +214,11 @@ class HttpParser extends EventEmitter
         $serverParams = [
             'REQUEST_TIME'          =>  time(),
             'REQUEST_TIME_FLOAT'    =>  microtime(true),
-            'SERVER_SOFTWARE'       =>  'ReactPhp/alpha',
+            'SERVER_SOFTWARE'       =>  'Ant-Network/alpha',
         ];
 
-        $remoteAddressParts = parse_url($this->stream->getRemoteAddress());
-        $localAddressParts = parse_url($this->stream->getLocalAddress());
+        $remoteAddressParts = parse_url($this->input->getRemoteAddress());
+        $localAddressParts = parse_url($this->input->getLocalAddress());
 
         $serverParams['REMOTE_ADDR'] = $remoteAddressParts['host'];
         $serverParams['REMOTE_PORT'] = $remoteAddressParts['port'];
@@ -243,7 +241,7 @@ class HttpParser extends EventEmitter
                 throw new HttpException(511, 'Only chunked-encoding is allowed for Transfer-Encoding');
             }
 
-            return new ChunkedDecoderBuffer();
+            return new ChunkedDecoderBuffer($request->getBody());
         }
 
         // 已知长度
@@ -259,6 +257,6 @@ class HttpParser extends EventEmitter
             return new LengthLimitedBuffer($request->getBody(), $contentLength);
         }
 
-        throw new HttpException(417, "Expectation failed");
+        throw new HttpException(411, "Expectation failed");
     }
 }

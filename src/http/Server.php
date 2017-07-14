@@ -1,7 +1,9 @@
 <?php
 namespace Ant\Network\Http;
 
-use Evenement\EventEmitter;
+use Ant\Coroutine\Task;
+use Evenement\EventEmitterInterface;
+use Evenement\EventEmitterTrait;
 use React\Socket\ServerInterface;
 use React\EventLoop\LoopInterface;
 use React\Socket\ConnectionInterface;
@@ -37,12 +39,14 @@ use Psr\Http\Message\ServerRequestInterface;
  * Class Server
  * @package Ant\Network\Http
  */
-class Server extends EventEmitter
+class Server implements EventEmitterInterface
 {
+    use EventEmitterTrait;
+
     protected $options = [
-        'maxHeaderSize' =>  4096,
-        'maxBodySize'   =>  2097152,
-        'timeout'       =>  30
+        'maxHeaderSize'     =>  4096,
+        'maxBodySize'       =>  2097152,
+        'keepAliveTimeout'  =>  5
     ];
 
     public static function create($uri, LoopInterface $loop, array $context = [], array $options = [])
@@ -59,33 +63,54 @@ class Server extends EventEmitter
         $io->on('connection', [$this, 'handleConnection']);
     }
 
+    /**
+     * 重载emit,支持协程
+     *
+     * @param $event
+     * @param array $arguments
+     */
+    public function emit($event, array $arguments = [])
+    {
+        foreach ($this->listeners($event) as $listener) {
+            Task::start($listener, $arguments);
+        }
+    }
+
+    /**
+     * @param ConnectionInterface $socket
+     */
     public function handleConnection(ConnectionInterface $socket)
     {
-        // Todo KeepAlive时间
-        // Todo 超时机制,指定时间没完成,触发回调关闭连接
-        // Todo 响应超时,客户端主动断开连接,不再写入
-        $this->emit('connection', [$socket]);
+        $conn = new Connection($socket);
+
+        $conn->setTimeout($this->options['keepAliveTimeout'], [$conn, 'close']);
+
+        $this->emit('connection', [$conn]);
 
         $buffer = new HttpParser(
-            $socket,
+            $conn,
             $this->options['maxHeaderSize'],
             $this->options['maxBodySize']
         );
 
-        $buffer->on('data', function (ServerRequestInterface $request) use ($socket) {
-            $this->handleRequest($request, $socket);
+        $buffer->on('data', function (ServerRequestInterface $request) use ($conn) {
+            $this->handleRequest($request, $conn);
         });
 
-        $buffer->on('error', function (\Exception $e) use ($socket, $buffer) {
+        $buffer->on('error', function (\Exception $e) use ($conn, $buffer) {
             // 如果没有处理异常,直接断开连接
             if ($this->listeners('error')) {
-                $this->emit('error', [$e, $socket]);
+                $this->emit('error', [$e, $conn]);
             } else {
-                $socket->close();
+                $conn->close();
             }
         });
     }
 
+    /**
+     * @param ServerRequestInterface $request
+     * @param ConnectionInterface $socket
+     */
     public function handleRequest(ServerRequestInterface $request, ConnectionInterface $socket)
     {
         $response = Response::prepare($socket, $request);

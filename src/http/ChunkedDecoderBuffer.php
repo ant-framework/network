@@ -2,6 +2,7 @@
 namespace Ant\Network\Http;
 
 use Evenement\EventEmitter;
+use Psr\Http\Message\StreamInterface;
 
 /**
  * Todo 重构分块解码
