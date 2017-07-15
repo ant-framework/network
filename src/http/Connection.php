@@ -1,47 +1,48 @@
 <?php
 namespace Ant\Network\Http;
 
+use React\EventLoop\LoopInterface;
 use React\EventLoop\Timer\Timer;
 use React\Stream\Util;
 use Evenement\EventEmitter;
 use React\Socket\ConnectionInterface;
 use React\Stream\WritableStreamInterface;
 
+/**
+ * Class Connection
+ * @package Ant\Network\Http
+ */
 class Connection extends EventEmitter implements ConnectionInterface
 {
-    protected $timeout = null;
+    protected $loop;
 
-    protected $conn = null;
+    private $conn;
 
-    protected $timer = null;
+    private $timer;
 
-    public function __construct(ConnectionInterface $conn, $timeout = 5)
+    private $keepAliveTime;
+
+    public function __construct(ConnectionInterface $conn, LoopInterface $loop, $keepAliveTime = null)
     {
         $this->conn = $conn;
+        $this->loop = $loop;
+        $this->keepAliveTime = $keepAliveTime;
 
-        $this->timeout = $timeout;
-
+        // 事件绑定
         Util::forwardEvents($conn, $this, ['end', 'error', 'close', 'pipe', 'drain']);
-
+        // 每次数据抵达的时候重置超时时间
         $this->conn->on('data', [$this, 'handleData']);
-
+        // 设置保持连接时间,每次数据抵达刷新时间
         $this->setKeepAliveTime();
     }
 
     public function handleData($data)
     {
-        \Ant\Coroutine\cancelTimer($this->timer);
+        $this->loop->cancelTimer($this->timer);
 
         $this->setKeepAliveTime();
 
         $this->emit('data', [$data]);
-    }
-
-    protected function setKeepAliveTime()
-    {
-        $this->timer = \Ant\Coroutine\addTimer($this->timeout, function () {
-            $this->emit('timeout', [$this]);
-        });
     }
 
     public function setTimeout($msecs, callable $callback = null)
@@ -50,7 +51,19 @@ class Connection extends EventEmitter implements ConnectionInterface
             $this->on('timeout', $callback);
         }
 
-        $this->timeout = $msecs;
+        $this->keepAliveTime = $msecs;
+    }
+
+    protected function setKeepAliveTime()
+    {
+        // 永不超时
+        if ($this->keepAliveTime === null) {
+            return;
+        }
+
+        $this->timer = $this->loop->addTimer($this->keepAliveTime, function () {
+            $this->emit('timeout', [$this]);
+        });
     }
 
     public function isReadable()

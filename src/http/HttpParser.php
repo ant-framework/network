@@ -14,7 +14,6 @@ use React\Stream\ReadableStreamInterface;
 use React\Stream\WritableStreamInterface;
 
 /**
- * Todo 请求超时
  * Todo 重构解析器
  * Todo 支持对象池,允许重复利用(考虑取舍)
  *
@@ -80,23 +79,6 @@ class HttpParser extends EventEmitter
     }
 
     /**
-     * 关闭请求缓冲区
-     */
-    public function handleClose()
-    {
-        if ($this->closed) {
-            return;
-        }
-
-        $this->clear();
-        $this->closed = true;
-        $this->input->close();
-
-        $this->emit('close');
-        $this->removeAllListeners();
-    }
-
-    /**
      * @param $data
      */
     public function handleData($data)
@@ -135,12 +117,34 @@ class HttpParser extends EventEmitter
         }
     }
 
+    /**
+     * 触发错误事件,同时清空缓冲区数据
+     *
+     * @param $exception
+     */
     public function handleError($exception)
     {
         // 不在接收数据
         $this->input->removeListener('data', [$this, 'handleData']);
-        $this->emit('error', [$exception, $this]);
+        $this->emit('error', [$exception]);
         $this->clear();
+    }
+
+    /**
+     * 关闭请求缓冲区
+     */
+    public function handleClose()
+    {
+        if ($this->closed) {
+            return;
+        }
+
+        $this->clear();
+        $this->closed = true;
+        $this->input->close();
+
+        $this->emit('close');
+        $this->removeAllListeners();
     }
 
     /**

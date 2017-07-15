@@ -52,7 +52,7 @@ class Response extends \Ant\Http\Response
      */
     protected static $defaultHeaders = [
         'X-Powered-By'      =>  'Ant-Framework',
-        'Server'            =>  'ReactPhp/alpha',
+        'Server'            =>  'ant-network/alpha',
     ];
 
     /**
@@ -71,10 +71,6 @@ class Response extends \Ant\Http\Response
             $headers['Connection'] = ['keep-alive'];
         } else {
             $headers['Connection'] = ['close'];
-        }
-
-        if ($request->getMethod() === "HEAD") {
-            // Todo HEAD头将不再响应Body
         }
 
         return new static($output, 200, $headers, null, '', $request->getProtocolVersion());
@@ -110,7 +106,6 @@ class Response extends \Ant\Http\Response
 
         if ($this->body instanceof StreamingBody) {
             $this->headers['Transfer-Encoding'] = ['chunked'];
-            $this->chunkedEncoding = true;
         }
 
         if (strtolower($this->getHeaderLine('Connection')) == 'keep-alive') {
@@ -136,7 +131,10 @@ class Response extends \Ant\Http\Response
             $this->output->write((string) $this);
         }
 
+        if (!$this->keepAlive) {
+            $this->output->end();
+        }
+
         $this->writable = false;
     }
-
 }

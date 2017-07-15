@@ -1,7 +1,7 @@
 <?php
-
-
 require 'vendor/autoload.php';
+
+ini_set("memory_limit", "512M");
 
 //$client = stream_socket_client("tcp://127.0.0.1:8080");
 //$client = stream_socket_client("tcp://120.76.205.180:8777");
@@ -29,20 +29,21 @@ require 'vendor/autoload.php';
 
 $loop = \React\EventLoop\Factory::create();
 
-$loop->run();
-//$loop->addPeriodicTimer(3, function () use ($connPool) {
-//    $startTime = microtime(true);
-//
-//    foreach ($connPool as $index => $socket) {
-//        if ($socket->isTimeout()) {
-//            $socket->emit('timeout', [$socket]);
-//            unset($connPool[$index]);
-//        }
-//    }
-//
-//    echo (microtime(true) - $startTime) * 1000;
-//
-//    var_dump(count($connPool));
-//});
+$timers = [];
+for ($i = 0; $i < 200000; $i++) {
+    $timers[] = $loop->addTimer(59, function () {});
+}
 
-//$loop->run();
+while ($timer = array_shift($timers)) {
+    $loop->cancelTimer($timer);
+}
+
+$loop->futureTick(function (\React\EventLoop\LoopInterface $loop) {
+    $start = microtime(true);
+
+    $loop->addTimer(59, function () use ($start) {
+        echo (microtime(true) - $start) * 1000;
+    });
+});
+
+$loop->run();
