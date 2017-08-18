@@ -1,0 +1,6 @@
+Todo Application定时检查检查内存使用情况,请求数量限流
+Todo 一个进程最多接收指定的连接数
+Todo 全局中间件,过滤器,通过Request创建Response,将用户返回的response通过socket发给客户端
+Todo 过滤器调用通过迭代器完成,由系统控制
+Todo 中间件调用应该有开发者完成,通过"yield next"来触发下一个中间件
+Todo 中间件需要支持协程调用

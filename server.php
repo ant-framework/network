@@ -8,7 +8,16 @@ $server = new \Ant\Network\Http\Server($loop, [
     'maxBodySize'   =>  2 * 1024 * 1024,
 ]);
 
-$server->on('request', function (\Ant\Http\ServerRequest $request, \Ant\Network\Http\Response $response) {
+$server->on('connection', function (\Ant\Network\Http\Connection $conn) {
+    echo 'client ' . $conn->getRemoteAddress(), PHP_EOL;
+
+    $conn->setTimeout(5, function (\Ant\Network\Http\Connection $conn) {
+        echo 'client timeout', PHP_EOL;
+        $conn->close();
+    });
+});
+
+$server->on('request', function (\Ant\Http\ServerRequest $request, \Ant\Network\Http\Response $response) use ($loop) {
     if ($request->getOriginalMethod() == 'OPTIONS') {
         $response = $response->withHeaders([
             'Access-Control-Allow-Methods' => 'GET,POST,PATCH,DELETE,PUT,HEAD,OPTIONS',
@@ -23,26 +32,14 @@ $server->on('request', function (\Ant\Http\ServerRequest $request, \Ant\Network\
             'Content-Type'  => 'application/json',
         ]);
 
-        $response->getBody()->write(json_encode($request->getHeaders()));
+        $response->getBody()->write(var_export($request->getHeaders(), true));
+        $response = $response->bodyConvertToStream();
     }
 
+    // todo network库参考node
+    // todo 框架实现参考koa
+    // todo 流式响应
     $response->end();
-});
-
-$server->on('error', function (\Exception $e, \React\Socket\ConnectionInterface $socket) {
-    $response = new \Ant\Http\Response(500);
-
-    echo "Error : {$e->getMessage()} in {$e->getFile()} {$e->getLine()}", PHP_EOL;
-
-    if ($e instanceof \Ant\Http\Exception\HttpException) {
-        $response = $response
-            ->withStatus($e->getStatusCode())
-            ->withHeaders($e->getHeaders());
-    }
-
-    $response->getBody()->write($e->getMessage());
-
-    $socket->end((string) $response);
 });
 
 $server->listen(new \React\Socket\Server(8080, $loop));

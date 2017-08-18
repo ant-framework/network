@@ -1,7 +1,6 @@
 <?php
 namespace Ant\Network\Http;
 
-use Ant\Http\Exception\HttpException;
 use Evenement\EventEmitter;
 use Psr\Http\Message\StreamInterface;
 
@@ -11,12 +10,11 @@ use Psr\Http\Message\StreamInterface;
  */
 class LengthLimitedBuffer extends EventEmitter implements BodyBufferInterface
 {
-    protected $body;
-    protected $maxLength;
+    private $body;
+    private $maxLength;
 
     public function __construct(StreamInterface $body, $maxLength)
     {
-        // Todo Body实现流式读取
         $this->body = $body;
         $this->maxLength = $maxLength;
     }

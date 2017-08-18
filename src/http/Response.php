@@ -1,21 +1,24 @@
 <?php
 namespace Ant\Network\Http;
 
+use Evenement\EventEmitterTrait;
+use Evenement\EventEmitterInterface;
+use Ant\Http\Response as PsrResponse;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\StreamInterface;
 use React\Socket\ConnectionInterface;
 use React\Stream\WritableStreamInterface;
 
 /**
- * Todo 完善Response
  * Todo 是否保持对象不变性
- * Todo 两种Body,一种Body实现ReadableInterface,支持流式写入,另一种为传统Body,需要完整的Body进行响应
  *
  * Class Response
  * @package Ant\Network\Http
  */
-class Response extends \Ant\Http\Response
+class Response extends PsrResponse implements EventEmitterInterface
 {
+    use EventEmitterTrait;
+
     /**
      * @var WritableStreamInterface
      */
@@ -33,14 +36,7 @@ class Response extends \Ant\Http\Response
      *
      * @var bool
      */
-    protected $writable = true;
-
-    /**
-     * 不保持不变性
-     *
-     * @var bool
-     */
-    protected $immutability = false;
+    protected $isEnd = false;
 
     /**
      * @var bool
@@ -98,14 +94,13 @@ class Response extends \Ant\Http\Response
         parent::__construct($code, $headers, $body, $phrase, $protocol);
     }
 
+    /**
+     * @return string
+     */
     public function headerToString()
     {
         if (!$this->hasHeader('date')) {
-            $this->headers['Date'] = [gmdate('D, d M Y H:i:s') . ' GMT'];
-        }
-
-        if ($this->body instanceof StreamingBody) {
-            $this->headers['Transfer-Encoding'] = ['chunked'];
+            $this->headers['date'] = [gmdate('D, d M Y H:i:s') . ' GMT'];
         }
 
         if (strtolower($this->getHeaderLine('Connection')) == 'keep-alive') {
@@ -115,9 +110,35 @@ class Response extends \Ant\Http\Response
         return parent::headerToString();
     }
 
+    /**
+     * @return StreamingBody
+     */
+    public function bodyConvertToStream()
+    {
+        if ($this->body instanceof StreamingBody) {
+            return $this;
+        }
+
+        $oldBody = $this->body;
+
+        $this->headers['transfer-encoding'] = ['chunked'];
+
+        // Todo 不在允许写入Header
+        $body = new StreamingBody($this->output, $this->headerToString());
+
+        $new = $this->withBody($body);
+
+        $new->getBody()->write((string) $oldBody);
+
+        return $new;
+    }
+
+    /**
+     * @param null $data
+     */
     public function end($data = null)
     {
-        if (!$this->writable) {
+        if ($this->isEnd) {
             return;
         }
 
@@ -135,6 +156,6 @@ class Response extends \Ant\Http\Response
             $this->output->end();
         }
 
-        $this->writable = false;
+        $this->isEnd = true;
     }
 }

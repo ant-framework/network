@@ -22,24 +22,19 @@ class Connection extends EventEmitter implements ConnectionInterface
 
     private $keepAliveTime;
 
-    public function __construct(ConnectionInterface $conn, LoopInterface $loop, $keepAliveTime = null)
+    public function __construct(ConnectionInterface $conn, LoopInterface $loop)
     {
         $this->conn = $conn;
         $this->loop = $loop;
-        $this->keepAliveTime = $keepAliveTime;
 
         // 事件绑定
         Util::forwardEvents($conn, $this, ['end', 'error', 'close', 'pipe', 'drain']);
         // 每次数据抵达的时候重置超时时间
         $this->conn->on('data', [$this, 'handleData']);
-        // 设置保持连接时间,每次数据抵达刷新时间
-        $this->setKeepAliveTime();
     }
 
     public function handleData($data)
     {
-        $this->loop->cancelTimer($this->timer);
-
         $this->setKeepAliveTime();
 
         $this->emit('data', [$data]);
@@ -52,10 +47,19 @@ class Connection extends EventEmitter implements ConnectionInterface
         }
 
         $this->keepAliveTime = $msecs;
+
+        $this->setKeepAliveTime();
     }
 
+    /**
+     * 设置保持连接时间,每次数据抵达刷新时间
+     */
     protected function setKeepAliveTime()
     {
+        if ($this->timer) {
+            $this->loop->cancelTimer($this->timer);
+        }
+
         // 永不超时
         if ($this->keepAliveTime === null) {
             return;
@@ -103,6 +107,12 @@ class Connection extends EventEmitter implements ConnectionInterface
 
     public function close()
     {
+        $this->removeAllListeners();
+
+        if ($this->timer) {
+            $this->loop->cancelTimer($this->timer);
+        }
+
         $this->conn->close();
     }
 

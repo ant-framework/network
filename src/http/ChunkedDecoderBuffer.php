@@ -15,10 +15,16 @@ class ChunkedDecoderBuffer extends EventEmitter implements BodyBufferInterface
     const CRLF = "\r\n";
     const MAX_CHUNK_HEADER_SIZE = 1024;
 
+    private $body;
     private $buffer = '';
     private $chunkSize = 0;
     private $transferredSize = 0;
     private $headerCompleted = false;
+
+    public function __construct(StreamInterface $body)
+    {
+        $this->body = $body;
+    }
 
     /** @internal */
     public function feed($data)
@@ -68,7 +74,7 @@ class ChunkedDecoderBuffer extends EventEmitter implements BodyBufferInterface
 
             if ($chunk !== '') {
                 $this->transferredSize += strlen($chunk);
-                $this->emit('data', array($chunk));
+                $this->body->write($chunk);
                 $this->buffer = (string)substr($this->buffer, strlen($chunk));
             }
 
@@ -76,7 +82,7 @@ class ChunkedDecoderBuffer extends EventEmitter implements BodyBufferInterface
 
             if ($positionCrlf === 0) {
                 if ($this->chunkSize === 0) {
-                    $this->emit('end');
+                    $this->emit('complete');
                     return;
                 }
                 $this->chunkSize = 0;

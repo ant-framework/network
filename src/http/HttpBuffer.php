@@ -14,18 +14,18 @@ use React\Stream\ReadableStreamInterface;
 use React\Stream\WritableStreamInterface;
 
 /**
- * Todo ÖØ¹¹½âÎöÆ÷
- * Todo Ö§³Ö¶ÔÏó³Ø,ÔÊÐíÖØ¸´ÀûÓÃ(¿¼ÂÇÈ¡Éá)
+ * Todo é‡æž„è§£æžå™¨
+ * Todo æ”¯æŒå¯¹è±¡æ± ,å…è®¸é‡å¤åˆ©ç”¨(è€ƒè™‘å–èˆ)
  *
- * request»º³åÇø,µ±¶ÁÈ¡Íê³ÉÊ±,Í³Ò»·µ»ØÊý¾Ý
+ * requestç¼“å†²åŒº,å½“è¯»å–å®Œæˆæ—¶,ç»Ÿä¸€è¿”å›žæ•°æ®
  *
  * Class RequestHeaderParser
  * @package Ant\Network\Http
  */
-class HttpParser extends EventEmitter
+class HttpBuffer extends EventEmitter
 {
     /**
-     * @var ConnectionInterface
+     * @var Connection
      */
     protected $input;
 
@@ -60,12 +60,12 @@ class HttpParser extends EventEmitter
     protected $maxBodySize;
 
     /**
-     * @param ConnectionInterface $input
+     * @param Connection $input
      * @param int $maxHeaderSize
      * @param int $maxBodySize
      */
     public function __construct(
-        ConnectionInterface $input,
+        Connection $input,
         $maxHeaderSize = 4096,
         $maxBodySize = 65535
     ) {
@@ -85,7 +85,7 @@ class HttpParser extends EventEmitter
     {
         try {
             if ($this->headerArrive) {
-                // ½»¸øbody½ÓÊÕÆ÷´¦Àí
+                // äº¤ç»™bodyæŽ¥æ”¶å™¨å¤„ç†
                 $this->bodyReceiver->feed($data);
                 return;
             }
@@ -101,16 +101,16 @@ class HttpParser extends EventEmitter
             }
 
             if ($currentHeaderSize > $this->maxHeaderSize) {
-                // Êý¾ÝÒç³öÒì³£
+                // æ•°æ®æº¢å‡ºå¼‚å¸¸
                 throw new HttpException(
                     431, "Maximum header size of {$this->maxHeaderSize} exceeded."
                 );
             }
 
-            // headerÈ«²¿µÖ´ï
+            // headerå…¨éƒ¨æŠµè¾¾
             if (false !== $endOfHeader) {
                 $this->headerArrive = true;
-                $this->parseRequest();
+                $this->parseRequestAntEmit();
             }
         } catch (\Exception $exception) {
             $this->handleError($exception);
@@ -118,20 +118,18 @@ class HttpParser extends EventEmitter
     }
 
     /**
-     * ´¥·¢´íÎóÊÂ¼þ,Í¬Ê±Çå¿Õ»º³åÇøÊý¾Ý
+     * è§¦å‘é”™è¯¯äº‹ä»¶,åŒæ—¶æ¸…ç©ºç¼“å†²åŒºæ•°æ®
      *
      * @param $exception
      */
     public function handleError($exception)
     {
-        // ²»ÔÚ½ÓÊÕÊý¾Ý
-        $this->input->removeListener('data', [$this, 'handleData']);
-        $this->emit('error', [$exception]);
+        $this->emit('clientError', [$exception, $this->input]);
         $this->clear();
     }
 
     /**
-     * ¹Ø±ÕÇëÇó»º³åÇø
+     * å½“å®¢æˆ·ç«¯æ–­å¼€è¿žæŽ¥æ—¶,æ¸…ç©ºç¼“å†²åŒºä¸Žç›‘å¬è€…
      */
     public function handleClose()
     {
@@ -148,7 +146,7 @@ class HttpParser extends EventEmitter
     }
 
     /**
-     * Çå³ý»º³åÇøÊý¾Ý
+     * æ¸…é™¤ç¼“å†²åŒºæ•°æ®
      */
     public function clear()
     {
@@ -158,13 +156,13 @@ class HttpParser extends EventEmitter
     }
 
     /**
-     * ÒòÎªHttpÐ­ÒéÊÇ°ëË«¹¤Ð­Òé,ËùÒÔheaderµÖ´ïÖ®ºó
-     * ¿ÉÒÔÁ¢¿ÌÇå³ýheader»º³åÇøÄÚµÄÊý¾Ý,Í¬Ê±½«ºóÐøµÄÊý¾ÝÐ´Èëbody»º³åÇø
-     * ÔÚbodyÍêÈ«µÖ´ïÖ®ºó,ÊÓÎªhttpÇëÇóµ½´ï,´ËÊ±ÔÚÏìÓ¦Ö®Ç°,²»Ó¦¸ÃÊÜÀíÐÂµÄÇëÇó
-     * ËùÒÔºóÐøµÄÊäÈë½«»á±»Å×Æú,Ö±µ½ÏìÓ¦Íê³ÉÖ®ºó,ÔÙ¿ªÊ¼´¦ÀíÐÂµÄÇëÇó
-     * ½«ÇëÇó·ÖÎªheadersÓëbody,Í¬Ê±½«Body½»¸øBody½ÓÊÕÆ÷½øÐÐ´¦Àí
+     * å› ä¸ºHttpåè®®æ˜¯åŠåŒå·¥åè®®,æ‰€ä»¥headeræŠµè¾¾ä¹‹åŽ
+     * å¯ä»¥ç«‹åˆ»æ¸…é™¤headerç¼“å†²åŒºå†…çš„æ•°æ®,åŒæ—¶å°†åŽç»­çš„æ•°æ®å†™å…¥bodyç¼“å†²åŒº
+     * åœ¨bodyå®Œå…¨æŠµè¾¾ä¹‹åŽ,è§†ä¸ºhttpè¯·æ±‚åˆ°è¾¾,æ­¤æ—¶åœ¨å“åº”ä¹‹å‰,ä¸åº”è¯¥å—ç†æ–°çš„è¯·æ±‚
+     * æ‰€ä»¥åŽç»­çš„è¾“å…¥å°†ä¼šè¢«æŠ›å¼ƒ,ç›´åˆ°å“åº”å®Œæˆä¹‹åŽ,å†å¼€å§‹å¤„ç†æ–°çš„è¯·æ±‚
+     * å°†è¯·æ±‚åˆ†ä¸ºheadersä¸Žbody,åŒæ—¶å°†Bodyäº¤ç»™BodyæŽ¥æ”¶å™¨è¿›è¡Œå¤„ç†
      */
-    protected function parseRequest()
+    protected function parseRequestAntEmit()
     {
         list($headers, $body) = explode("\r\n\r\n", $this->buffer, 2);
 
@@ -175,7 +173,7 @@ class HttpParser extends EventEmitter
         $this->emit('header', [$request]);
 
         if ($this->checkSkipBody($request)) {
-            $this->emit('data', [$request]);
+            $this->emit('complete', [$request, $this->input]);
             $this->clear();
             return;
         }
@@ -183,20 +181,18 @@ class HttpParser extends EventEmitter
         $bodyReceiver = $this->createBodyReceiver($request);
 
         $bodyReceiver->on('complete', function () use ($request) {
-            // Todo ³¬´óBody½«²»ÍêÈ«½ÓÊÕ,Ö±½Ó¶Ï¿ªÁ¬½Ó
+            // Todo è¶…å¤§Bodyå°†ä¸å®Œå…¨æŽ¥æ”¶,ç›´æŽ¥æ–­å¼€è¿žæŽ¥
             if ($request->getBody()->getSize() > $this->maxBodySize) {
                 throw new HttpException(
                     413, "Maximum body size of {$this->maxBodySize} exceeded."
                 );
             }
 
-            $this->emit('data', [$request]);
+            $this->emit('complete', [$request, $this->input]);
             $this->clear();
         });
 
-        $bodyReceiver->on('error', function ($error) {
-            $this->emit('error', array($error));
-        });
+        $bodyReceiver->on('error', [$this, 'handleError']);
 
         $this->bodyReceiver = $bodyReceiver;
 
@@ -209,7 +205,7 @@ class HttpParser extends EventEmitter
     }
 
     /**
-     * »ñÈ¡ServerÐÅÏ¢
+     * èŽ·å–Serverä¿¡æ¯
      *
      * @return array
      */
@@ -239,7 +235,7 @@ class HttpParser extends EventEmitter
      */
     protected function createBodyReceiver(ServerRequest $request)
     {
-        // ·Ö¿é±àÂë
+        // åˆ†å—ç¼–ç 
         if ($request->hasHeader('Transfer-Encoding')) {
             if (strtolower($request->getHeaderLine('Transfer-Encoding')) !== 'chunked') {
                 throw new HttpException(511, 'Only chunked-encoding is allowed for Transfer-Encoding');
@@ -248,13 +244,13 @@ class HttpParser extends EventEmitter
             return new ChunkedDecoderBuffer($request->getBody());
         }
 
-        // ÒÑÖª³¤¶È
+        // å·²çŸ¥é•¿åº¦
         if ($request->hasHeader('Content-Length')) {
             $string = $request->getHeaderLine('Content-Length');
 
-            $contentLength = (int)$string;
+            $contentLength = (int) $string;
 
-            if ((string)$contentLength !== (string)$string) {
+            if ((string)$contentLength !== (string) $string) {
                 throw new HttpException(400, 'The value of `Content-Length` is not valid');
             }
 

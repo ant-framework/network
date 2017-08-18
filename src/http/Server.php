@@ -1,6 +1,7 @@
 <?php
 namespace Ant\Network\Http;
 
+use Ant\Http\Exception\HttpException;
 use Evenement\EventEmitterTrait;
 use React\Socket\ServerInterface;
 use React\EventLoop\LoopInterface;
@@ -9,15 +10,12 @@ use React\Socket\ConnectionInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
 /**
- * Todo 100-continue 417
  * Todo 致命错误与无法catch的错误,处理完后,重启服务器
- * Todo 检查长链接是否稳定
- * Todo Connection Timeout,指定时间内未完成,则视为超时,断开连接并响应超时错误
  * Todo 兼容Ioc容器
  *
  * @event
  * connection   建立一个新的tcp链接
- * error        客户端错误事件
+ * clientError  客户端错误事件
  * request      请求完全抵达事件
  * upgrade      协议升级事件
  *
@@ -63,48 +61,73 @@ class Server implements EventEmitterInterface
      */
     public function handleConnection(ConnectionInterface $socket)
     {
-        $conn = new Connection($socket, $this->loop, $this->options['keepAliveTimeout']);
-        // 指定时间内没有数据抵达将会自动断开连接
-        $conn->on('timeout', [$conn, 'close']);
-
+        $conn = new Connection($socket, $this->loop);
+        // 提供支持超时的Connection给客户端
         $this->emit('connection', [$conn]);
 
-        $buffer = new HttpParser(
-            $conn,
-            $this->options['maxHeaderSize'],
-            $this->options['maxBodySize']
-        );
+        if (!$conn->listeners('timeout')) {
+            // 指定时间内没有数据抵达将会自动断开连接
+            $conn->setTimeout($this->options['keepAliveTimeout'], [$conn, 'close']);
+        }
 
-        $buffer->on('data', function (ServerRequestInterface $request) use ($conn) {
-            $this->handleRequest($request, $conn);
-        });
+        // 创建http缓冲区
+        $buffer = new HttpBuffer($conn, $this->options['maxHeaderSize'], $this->options['maxBodySize']);
 
-        $buffer->on('error', function (\Exception $e) use ($conn) {
-            // 如果没有处理异常,直接断开连接
-            if ($this->listeners('error')) {
-                $this->emit('error', [$e, $conn]);
-            } else {
-                $conn->close();
-            }
-        });
+        $buffer->on('complete', [$this, 'handleRequest']);
+
+        $buffer->on('clientError', [$this, 'handleError']);
     }
 
     /**
+     * Todo 检查是否为合法的Http请求
      * @param ServerRequestInterface $request
      * @param ConnectionInterface $socket
      */
-    protected function handleRequest(ServerRequestInterface $request, ConnectionInterface $socket)
+    public function handleRequest(ServerRequestInterface $request, ConnectionInterface $socket)
     {
         $response = Response::prepare($socket, $request);
 
-        // 客户端要求升级协议,http服务器将不再处理此链接
+        if ($request->hasHeader('Expect')) {
+            if (empty($this->listeners['checkExpectation'])) {
+                throw new HttpException(417, "Expectation Failed");
+            }
+
+            $this->emit('checkExpectation', [$request, $response]);
+            return;
+        }
+
+        // Todo 无人监听,响应 400或426
         if ($request->hasHeader('Upgrade')) {
+            // 客户端要求升级协议,http服务器将不再处理此链接
             $socket->removeAllListeners();
             $this->emit('upgrade', [$request, $socket]);
             return;
         }
 
-        // Todo 检查是否为合法的Http请求
         $this->emit('request', [$request, $response]);
+    }
+
+    /**
+     * @param \Exception $e
+     * @param ConnectionInterface $socket
+     */
+    public function handleError(\Exception $e, \React\Socket\ConnectionInterface $socket)
+    {
+        if (isset($this->listeners['clientError'])) {
+            $this->emit('clientError', [$e, $socket]);
+            return;
+        }
+
+        $response = new \Ant\Http\Response(500);
+
+        if ($e instanceof \Ant\Http\Exception\HttpException) {
+            $response = $response
+                ->withStatus($e->getStatusCode())
+                ->withHeaders($e->getHeaders());
+        }
+
+        $response->getBody()->write($e->getMessage());
+
+        $socket->end((string) $response);
     }
 }
