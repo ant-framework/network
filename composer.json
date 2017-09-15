@@ -17,7 +17,7 @@
   },
   "autoload": {
     "psr-4": {
-      "Ant\\Network\\JsonRpc\\": "./src/json-rpc",
+      "Ant\\Network\\Socks\\": "./src/socks",
       "Ant\\Network\\Http\\": "./src/http"
     }
   }

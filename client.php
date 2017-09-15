@@ -3,33 +3,29 @@ require 'vendor/autoload.php';
 
 ini_set("memory_limit", "512M");
 
-//$client = stream_socket_client("tcp://127.0.0.1:8080");
-//$client = stream_socket_client("tcp://120.76.205.180:8777");
+$client = stream_socket_client("tcp://127.0.0.1:80");
 
-//$request = new \Ant\Http\Request('GET', "http://120.76.205.180:8777");
+$request = new \Ant\Http\Request('GET', "http://127.0.0.1/test.php");
 
-//$request = $request->withHeaders([
-//    'Content-Type'  =>  'application/json',
-//    'Cookie'        =>  'token=foobar',
-//    'Connection'    =>  'keep-alive',
-//    'Accept'        =>  'application/json',
-//]);
+$request = $request->withHeaders([
+    'Content-Type'  =>  'application/json',
+    'Cookie'        =>  'token=foobar',
+    'Connection'    =>  'keep-alive',
+    'Accept'        =>  'application/json',
+]);
 
-//$request->getBody()->write(json_encode(['foo' => 'bar']));
+fwrite($client, (string) $request);
 
-//fwrite($client, (string) $request);
+echo fread($client, 8192);
 
-//echo fread($client, 8192);
+fwrite($client, (string) $request);
 
-//fwrite($client, (string) $request);
+fwrite($client, 'foobar');
 
-//fwrite($client, 'foobar');
-
-//fclose($client);
-
+fclose($client);
 
 // 保持不变性测试,性能,内存消耗
-$response = new \Ant\Http\Response();
+//$response = new \Ant\Http\Response();
 
 // 要保证在中间件中传递的时候,能够实时刷新
 
