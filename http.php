@@ -9,9 +9,7 @@ $server = new \Ant\Network\Http\Server($loop, [
 ]);
 
 $server->on('connection', function (\Ant\Network\Http\Connection $conn) {
-    echo 'client ' . $conn->getRemoteAddress(), PHP_EOL;
-
-    $conn->setTimeout(5, function (\Ant\Network\Http\Connection $conn) {
+    $conn->setTimeout(5, function ($conn) {
         echo 'client timeout', PHP_EOL;
         $conn->close();
     });
@@ -30,6 +28,7 @@ $server->on('request', function (\Ant\Http\ServerRequest $request, \Ant\Network\
             // 设置跨域信息
             'Access-Control-Allow-Origin' => '*',
             'Content-Type'  => 'application/json',
+            'Cache-Control' => 'max-age=3600'
         ]);
 
         $response->getBody()->write(var_export($request->getHeaders(), true));
