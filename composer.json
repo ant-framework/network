@@ -17,8 +17,9 @@
   },
   "autoload": {
     "psr-4": {
-      "Ant\\Network\\Socks\\": "./src/socks",
-      "Ant\\Network\\Http\\": "./src/http"
+      "Ant\\Network\\Shadowsocks\\": "./src/shadowsocks",
+      "Ant\\Network\\Http\\": "./src/http",
+      "Ant\\Crypt\\": "./cipher-src"
     }
   }
 }

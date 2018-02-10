@@ -1,22 +1,23 @@
 <?php
-namespace Ant\Network\Socks;
+namespace Ant\Network\Shadowsocks;
 
 use React\Stream\Util;
 use Evenement\EventEmitter;
+use React\Dns\Resolver\Resolver;
 use React\EventLoop\Timer\Timer;
 use React\EventLoop\LoopInterface;
 use React\Socket\ConnectionInterface;
 use React\Stream\WritableStreamInterface;
 
+/**
+ * Class Connection
+ * @package Ant\Network\Socks
+ */
 class Connection extends EventEmitter implements ConnectionInterface
 {
     protected $loop;
 
-    protected $parser;
-
-    protected $method;
-
-    protected $version;
+    protected $cryptor;
 
     private $conn;
 
@@ -28,58 +29,21 @@ class Connection extends EventEmitter implements ConnectionInterface
      * Connection constructor.
      * @param ConnectionInterface $conn
      * @param LoopInterface $loop
+     * @param array $options
      */
-    public function __construct(ConnectionInterface $conn, LoopInterface $loop)
-    {
-        $this->stage = Stage::INIT;
+    public function __construct(ConnectionInterface $conn, LoopInterface $loop, array $options) {
         $this->conn = $conn;
         $this->loop = $loop;
-        $this->parser = new Parser();
+
+        $this->cryptor = new Cryptor($options['password'], $options['method']);
 
         Util::forwardEvents($conn, $this, ['end', 'error', 'close', 'pipe', 'drain']);
         $this->conn->on('data', [$this, 'handleData']);
     }
 
-    public function handleData($data)
+    public function handleData($chunk)
     {
-        $this->setKeepAliveTime();
-
-        switch ($this->stage) {
-            case Stage::INIT :
-                list($this->version, $this->method) = $this->parser->parseSocksHeader($data);
-                break;
-            case Stage::AUTH :
-                if ($this->getAuthMethod() === 0x02) {
-                    list($this->username, $this->password) = $this->parser->parseUsernameAndPassword($data);
-                }
-                break;
-        }
-
-        $this->emit($this->stage, [$this, $data]);
-    }
-
-    public function getVersion()
-    {
-        return $this->version;
-    }
-
-    public function getAuthMethod()
-    {
-        return $this->method;
-    }
-
-    public function setStage($stage)
-    {
-        if (!Stage::isStage($stage)) {
-            // Todo Exception
-        }
-
-        $this->stage = $stage;
-    }
-
-    public function getStage()
-    {
-        return $this->stage;
+        $this->emit('data', [$this->cryptor->decrypt($chunk), $this]);
     }
 
     /**
@@ -142,11 +106,15 @@ class Connection extends EventEmitter implements ConnectionInterface
 
     public function write($data)
     {
+        $data = $this->cryptor->encrypt($data);
+
         $this->conn->write($data);
     }
 
     public function end($data = null)
     {
+        $data = $this->cryptor->encrypt($data);
+
         $this->conn->end($data);
     }
 
@@ -159,6 +127,7 @@ class Connection extends EventEmitter implements ConnectionInterface
         }
 
         $this->conn->close();
+        unset($this->cryptor);
     }
 
     public function getRemoteAddress()
