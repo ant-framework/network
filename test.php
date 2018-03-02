@@ -1,6 +1,49 @@
 <?php
 include "vendor/autoload.php";
 
+$encipher = new \Ant\Network\Shadowsocks\StreamEncryption('123', 'aes-256-cfb');
+$decipher = new \Ant\Network\Shadowsocks\StreamEncryption('123', 'aes-256-cfb');
+
+//$file = fopen('response.log', 'r');
+//
+//$length = 0;
+//while (!feof($file)) {
+//    $data = fread($file, 1024);
+//
+//    echo $decipher->decrypt($data);
+//}
+
+//$socket = stream_socket_client('tcp://14.215.177.38:80');
+//$socket = stream_socket_client('tcp://45.120.159.61:8043');
+$socket = stream_socket_client('tcp://127.0.0.1:8080');
+
+$req = new \Ant\Http\Request('GET', 'http://blog.csdn.net/shagoo/article/details/6396089');
+
+$port = file_get_contents('test.log');
+
+$header = 0x03 . chr(strlen('blog.csdn.net')) . 'blog.csdn.net' . $port;
+
+fwrite($socket, $encipher->encrypt($header . $req));
+
+stream_set_blocking($socket, false);
+
+$readStream = [$socket];
+
+$length = 0;
+
+while (true) {
+    if (false === @stream_select($readStream, $writeStream, $except, null)) {
+        continue;
+    }
+
+    $data = stream_get_contents($socket);
+
+    $length += strlen($data);
+
+    var_dump($length);
+    $data = $encipher->decrypt($data);
+}
+
 //function _sort($array)
 //{
 //    for ($i = 0, $length = count($array); $i < $length - 1; $i++) {
@@ -22,118 +65,28 @@ include "vendor/autoload.php";
 //    return $array;
 //}
 
-class Cryptor
-{
-    private $cipher_algo;
-    private $hash_algo;
-    private $iv_num_bytes;
-    private $format;
-    const FORMAT_RAW = 0;
-    const FORMAT_B64 = 1;
-    const FORMAT_HEX = 2;
 
-    public function __construct($cipher_algo = 'aes-256-ctr', $hash_algo = 'sha256', $fmt = Cryptor::FORMAT_B64)
-    {
-        $this->cipher_algo = $cipher_algo;
-        $this->hash_algo = $hash_algo;
-        $this->format = $fmt;
-        if (!in_array($cipher_algo, openssl_get_cipher_methods(true)))
-        {
-            throw new \Exception("Cryptor:: - unknown cipher algo {$cipher_algo}");
-        }
-        if (!in_array($hash_algo, openssl_get_md_methods(true)))
-        {
-            throw new \Exception("Cryptor:: - unknown hash algo {$hash_algo}");
-        }
-        $this->iv_num_bytes = openssl_cipher_iv_length($cipher_algo);
-    }
+//var_dump(hexdec());
+//$str = '，';
+//for ($i = 0; $i < 3; $i++) {
+//    var_dump(dechex(ord($str{$i})));
+//}
+//var_dump();
 
-    public function encryptString($in, $key, $fmt = null)
-    {
-        if ($fmt === null)
-        {
-            $fmt = $this->format;
-        }
-        // Build an initialisation vector
-        $iv = openssl_random_pseudo_bytes($this->iv_num_bytes, $isStrongCrypto);
-        if (!$isStrongCrypto) {
-            throw new \Exception("Cryptor::encryptString() - Not a strong key");
-        }
-        // Hash the key
-        $keyhash = openssl_digest($key, $this->hash_algo, true);
-        // and encrypt
-        $opts =  OPENSSL_RAW_DATA;
-        $encrypted = openssl_encrypt($in, $this->cipher_algo, $keyhash, $opts, $iv);
-        if ($encrypted === false)
-        {
-            throw new \Exception('Cryptor::encryptString() - Encryption failed: ' . openssl_error_string());
-        }
-        // The result comprises the IV and encrypted data
-        $res = $iv . $encrypted;
-        // and format the result if required.
-        if ($fmt == Cryptor::FORMAT_B64)
-        {
-            $res = base64_encode($res);
-        }
-        else if ($fmt == Cryptor::FORMAT_HEX)
-        {
-            $res = unpack('H*', $res)[1];
-        }
-        return $res;
-    }
+//echo chr(0x8c), PHP_EOL;
 
-    public function decryptString($in, $key, $fmt = null)
-    {
-        if ($fmt === null)
-        {
-            $fmt = $this->format;
-        }
-        $raw = $in;
-        // Restore the encrypted data if encoded
-        if ($fmt == Cryptor::FORMAT_B64)
-        {
-            $raw = base64_decode($in);
-        }
-        else if ($fmt == Cryptor::FORMAT_HEX)
-        {
-            $raw = pack('H*', $in);
-        }
-        // and do an integrity check on the size.
-        if (strlen($raw) < $this->iv_num_bytes)
-        {
-            throw new \Exception('Cryptor::decryptString() - ' .
-                'data length ' . strlen($raw) . " is less than iv length {$this->iv_num_bytes}");
-        }
-        // Extract the initialisation vector and encrypted data
-        $iv = substr($raw, 0, $this->iv_num_bytes);
-        $raw = substr($raw, $this->iv_num_bytes);
-        // Hash the key
-        $keyhash = openssl_digest($key, $this->hash_algo, true);
-        // and decrypt.
-        $opts = OPENSSL_RAW_DATA;
-        $res = openssl_decrypt($raw, $this->cipher_algo, $keyhash, $opts, $iv);
-        if ($res === false)
-        {
-            throw new \Exception('Cryptor::decryptString - decryption failed: ' . openssl_error_string());
-        }
-        return $res;
-    }
+//$result = file_get_contents('test.log');
 
-    public static function Encrypt($in, $key, $fmt = null)
-    {
-        $c = new Cryptor();
-        return $c->encryptString($in, $key, $fmt);
-    }
+//$result = pack('H*', 80);
+//var_dump($result);
+//var_dump(hexdec(unpack('H*', $result)[1]));
+//for ($i = 0; $i < strlen($result); $i++) {
+//    echo ord($result{$i}), PHP_EOL;
+//}
 
-    public static function Decrypt($in, $key, $fmt = null)
-    {
-        $c = new Cryptor();
-        return $c->decryptString($in, $key, $fmt);
-    }
-}
-
-
-
+//$result = pack('C*', 443);
+//
+//var_dump($result);
 //$loop = \React\EventLoop\Factory::create();
 //
 //$deferred = new \React\Promise\Deferred();

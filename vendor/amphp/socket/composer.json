@@ -1,0 +1,46 @@
+{
+    "name":           "amphp/socket",
+    "homepage":       "https://github.com/amphp/socket",
+    "description":    "Async socket connection tools for the amp concurrency framework",
+    "support": {
+        "issues": "https://github.com/amphp/socket/issues"
+    },
+    "keywords": [
+        "tcp",
+        "sockets",
+        "tls",
+        "encryption",
+        "async",
+        "non-blocking",
+        "amp"
+    ],
+    "license":        "MIT",
+    "authors": [
+        {
+            "name": "Daniel Lowrey",
+            "email": "rdlowrey@gmail.com"
+        }
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "require": {
+        "php": ">=5.5",
+        "amphp/amp": "^1",
+        "amphp/dns": "^0.8"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "~4.8",
+        "fabpot/php-cs-fixer": "~1.9"
+    },
+    "autoload": {
+        "psr-4": {
+            "Amp\\Socket\\": "lib/"
+        },
+        "files": ["lib/functions.php"]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Amp\\Socket\\Test\\": "test/"
+        }
+    }
+}

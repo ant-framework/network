@@ -1,0 +1,34 @@
+{
+  "name": "amphp/cache",
+  "homepage": "https://github.com/amphp/cache",
+  "description": "A promise-aware caching API built on the amp concurrency framework",
+  "license": "MIT",
+  "support": {
+    "issues": "https://github.com/amphp/cache/issues"
+  },
+  "authors": [
+    {
+      "name": "Niklas Keller",
+      "email": "me@kelunik.com"
+    },
+    {
+      "name": "Daniel Lowrey",
+      "email": "rdlowrey@php.net"
+    }
+  ],
+  "require": {
+    "amphp/amp": "^1"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "~4.8",
+    "fabpot/php-cs-fixer": "~1.9"
+  },
+  "suggest": {
+    "amphp/redis": "For redis cache driver support"
+  },
+  "autoload": {
+    "psr-4": {
+      "Amp\\Cache\\": "lib/"
+    }
+  }
+}

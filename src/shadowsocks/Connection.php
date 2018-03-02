@@ -3,8 +3,6 @@ namespace Ant\Network\Shadowsocks;
 
 use React\Stream\Util;
 use Evenement\EventEmitter;
-use React\Dns\Resolver\Resolver;
-use React\EventLoop\Timer\Timer;
 use React\EventLoop\LoopInterface;
 use React\Socket\ConnectionInterface;
 use React\Stream\WritableStreamInterface;
@@ -31,19 +29,18 @@ class Connection extends EventEmitter implements ConnectionInterface
      * @param LoopInterface $loop
      * @param array $options
      */
-    public function __construct(ConnectionInterface $conn, LoopInterface $loop, array $options) {
+    public function __construct(ConnectionInterface $conn, LoopInterface $loop, array $options)
+    {
         $this->conn = $conn;
         $this->loop = $loop;
 
-        $this->cryptor = new Cryptor($options['password'], $options['method']);
+        $this->cryptor = new StreamEncryption($options['password'], $options['method']);
 
         Util::forwardEvents($conn, $this, ['end', 'error', 'close', 'pipe', 'drain']);
-        $this->conn->on('data', [$this, 'handleData']);
-    }
 
-    public function handleData($chunk)
-    {
-        $this->emit('data', [$this->cryptor->decrypt($chunk), $this]);
+        $this->conn->on('data', function ($chunk) {
+            $this->emit('data', [$this->cryptor->decrypt($chunk), $this]);
+        });
     }
 
     /**
@@ -107,6 +104,8 @@ class Connection extends EventEmitter implements ConnectionInterface
     public function write($data)
     {
         $data = $this->cryptor->encrypt($data);
+
+        file_put_contents('response.log', $data, FILE_APPEND);
 
         $this->conn->write($data);
     }

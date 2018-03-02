@@ -1,14 +1,13 @@
 <?php
 namespace Ant\Network\Shadowsocks;
 
-use Ant\Http\Response;
 use Evenement\EventEmitterTrait;
 use React\Dns\Resolver\Resolver;
 use React\EventLoop\LoopInterface;
 use Evenement\EventEmitterInterface;
 use React\Socket\ConnectionInterface;
-use React\Socket\Server as TcpServer;
 use React\Socket\TcpConnector;
+use React\Socket\Server as TcpServer;
 
 /**
  * todo 检查必须参数
@@ -24,10 +23,6 @@ use React\Socket\TcpConnector;
  */
 class TcpRelay implements EventEmitterInterface
 {
-    const STAGE_INIT = 1;
-    const STAGE_CONNECTING = 2;
-    const STAGE_STREAM = 3;
-
     use EventEmitterTrait;
 
     protected $loop;
@@ -35,6 +30,8 @@ class TcpRelay implements EventEmitterInterface
     protected $dns;
 
     protected $options = [];
+
+    protected $connector;
 
     /**
      * @param LoopInterface $loop
@@ -45,6 +42,7 @@ class TcpRelay implements EventEmitterInterface
     {
         $this->loop = $loop;
         $this->dns = $dns;
+        $this->connector = new TcpConnector($this->loop);
         $this->options = array_merge($this->options, $options);
     }
 
@@ -65,34 +63,6 @@ class TcpRelay implements EventEmitterInterface
     {
         $socket = new Connection($connection, $this->loop, $this->options);
 
-        $socket->on('data', [$this, 'handleData']);
-    }
-
-    public function handleData($data, Connection $socket)
-    {
-        $addressType = ord($data{0});
-        $address = substr($data, 1, -2);
-        $port = substr($data, -2);
-        $connector = new TcpConnector($this->loop);
-
-        switch ($addressType) {
-            // 4-byte的ipv4地址
-            case 0x01:
-
-                break;
-            // 1~255-byte的域名
-            case 0x03:
-
-                break;
-            // 16-byte的ipv6地址
-            case 0x04:
-
-                break;
-        }
-    }
-
-    protected function parseData()
-    {
-
+        new TcpRelayHandle($this->connector, $this->dns, $socket);
     }
 }
