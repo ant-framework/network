@@ -1,6 +1,7 @@
 <?php
 namespace Ant\Network\Shadowsocks;
 
+use Ant\Http\Response;
 use React\Stream\Util;
 use Evenement\EventEmitter;
 use React\EventLoop\LoopInterface;
@@ -104,8 +105,6 @@ class Connection extends EventEmitter implements ConnectionInterface
     public function write($data)
     {
         $data = $this->cryptor->encrypt($data);
-
-        file_put_contents('response.log', $data, FILE_APPEND);
 
         $this->conn->write($data);
     }

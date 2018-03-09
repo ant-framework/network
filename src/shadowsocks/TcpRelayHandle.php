@@ -42,7 +42,7 @@ class TcpRelayHandle
         $this->dns = $dns;
         $this->clientSocket = $clientSocket;
 
-        $this->clientSocket->on('data', [$this, 'handleClientData']);
+        $this->clientSocket->once('data', [$this, 'handleClientData']);
     }
 
     public function handleClientData($data)
@@ -51,7 +51,7 @@ class TcpRelayHandle
             if ($this->stage === self::STAGE_CONNECTING) {
                 $this->handleStageConnecting($data);
             } elseif ($this->stage === self::STAGE_STREAM) {
-                $this->handleStageStream($data);
+                $this->writeToRemote($data);
             }
         } catch (\Throwable $e) {
             // todo logging
@@ -71,6 +71,7 @@ class TcpRelayHandle
 
         $data = substr($data, $headerLength);
 
+        // todo 取消dns
         $this->resolveHostname($addressType, $hostname)
             ->then(function ($address) use ($port) {
                 return $this->createSocketForAddress($address, $port);
@@ -78,25 +79,23 @@ class TcpRelayHandle
             ->then(function (Socket $socket) use ($data) {
                 $this->remoteSocket = $socket;
                 $this->remoteSocket->on('data', [$this, 'handleRemoteData']);
-
-                $this->handleStageStream($data);
+                $this->stage = self::STAGE_STREAM;
+                $this->writeToRemote($data);
             });
     }
 
-    public function handleStageStream($data)
+    public function writeToRemote($data)
     {
-        $this->stage = self::STAGE_STREAM;
-
-        if (strlen($data) > 0) {
-            $this->remoteSocket->write($data);
-        }
+        $this->remoteSocket->write($data);
     }
 
     public function handleRemoteData($data)
     {
+        file_put_contents('output.log', $data, FILE_APPEND);
+        file_put_contents('output.log', "\r\n===================\r\n", FILE_APPEND);
 
 
-//        $this->clientSocket->write($data);
+        $this->clientSocket->write($data);
     }
 
     /**
@@ -143,10 +142,8 @@ class TcpRelayHandle
         if (!$address) {
             return false;
         }
-        // 端口是一个大端位的16进制字符
-        $port = hexdec(unpack('H*', $port)[1]);
 
-        return [$addressType, $address, $port, $headerLength];
+        return [$addressType, $address, unpack('n*', $port)[1], $headerLength];
     }
 
     /**

@@ -8,6 +8,9 @@ use Evenement\EventEmitterInterface;
 use React\Socket\ConnectionInterface;
 use React\Socket\TcpConnector;
 use React\Socket\Server as TcpServer;
+use React\Stream\DuplexResourceStream;
+use RuntimeException;
+use InvalidArgumentException;
 
 /**
  * todo 检查必须参数
@@ -18,10 +21,10 @@ use React\Socket\Server as TcpServer;
  *  password
  *  method
  *
- * Class TcpRelay
+ * Class Server
  * @package Ant\Network\Shadowsocks
  */
-class TcpRelay implements EventEmitterInterface
+class Server implements EventEmitterInterface
 {
     use EventEmitterTrait;
 
@@ -46,10 +49,7 @@ class TcpRelay implements EventEmitterInterface
         $this->options = array_merge($this->options, $options);
     }
 
-    /**
-     * @param $uri
-     */
-    public function listen($uri)
+    public function listen($uri, array $context = [])
     {
         $server = new TcpServer($uri, $this->loop);
 
@@ -57,10 +57,17 @@ class TcpRelay implements EventEmitterInterface
     }
 
     /**
-     * @param ConnectionInterface $connection
+     * @param $connection
      */
-    public function handleConnection(ConnectionInterface $connection)
+    public function handleConnection($connection)
     {
+        static $first = true;
+
+        if ($first === false) {
+            return;
+        }
+        $first = false;
+
         $socket = new Connection($connection, $this->loop, $this->options);
 
         new TcpRelayHandle($this->connector, $this->dns, $socket);

@@ -23,6 +23,8 @@ class Crypto implements CipherInterface
 
     protected $fmt;
 
+    protected $ivLength;
+
     /**
      * Openssl constructor.
      * @param $method
@@ -46,9 +48,10 @@ class Crypto implements CipherInterface
             throw new InvalidArgumentException("Invalid cipher name [{$method}]");
         }
 
+        $this->ivLength = openssl_cipher_iv_length($method);
+
         if (is_null($iv)) {
-            $ivLen = openssl_cipher_iv_length($method);
-            $iv = openssl_random_pseudo_bytes($ivLen);
+            $iv = openssl_random_pseudo_bytes($this->ivLength);
         }
 
         $this->method = $method;
@@ -70,7 +73,7 @@ class Crypto implements CipherInterface
      */
     public function getIvLength()
     {
-        return strlen($this->iv);
+        return $this->ivLength;
     }
 
     /**
@@ -108,6 +111,8 @@ class Crypto implements CipherInterface
         return openssl_encrypt($data, $this->method, $key, $this->options, $iv);
     }
 
+    protected $tail;
+
     /**
      * @param $data
      * @param null $key
@@ -116,14 +121,39 @@ class Crypto implements CipherInterface
      */
     public function decrypt($data, $key = null, $iv = null)
     {
+        if (strlen($data) <= 0) {
+            return '';
+        }
+
         if (is_null($key)) {
             $key = $this->key;
         }
 
         if (is_null($iv)) {
             $iv = $this->iv;
+            $ivLength = $this->ivLength;
+        } else {
+            $ivLength = strlen($iv);
         }
 
-        return openssl_decrypt($data, $this->method, $key, $this->options, $iv);
+        $tl = strlen($this->tail);
+
+        if ($this->tail) {
+            $data = $this->tail . $data;
+        }
+
+        $result = openssl_decrypt($data, $this->method, $key, $this->options, $iv);
+        $result = substr($result, $tl);
+        $dataLength = strlen($data);
+        $mod = $dataLength % $ivLength;
+
+        if ($dataLength >= $ivLength) {
+            $iPos = -($mod + $ivLength);
+            $this->iv = substr($data, $iPos, $ivLength);
+        }
+
+        $this->tail = $mod != 0 ? substr($data, -$mod) : '';
+
+        return $result;
     }
 }

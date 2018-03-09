@@ -2,47 +2,49 @@
 include "vendor/autoload.php";
 
 $encipher = new \Ant\Network\Shadowsocks\StreamEncryption('123', 'aes-256-cfb');
-$decipher = new \Ant\Network\Shadowsocks\StreamEncryption('123', 'aes-256-cfb');
+//$encipher = new Encryptor('123', 'aes-256-cfb');
 
-//$file = fopen('response.log', 'r');
-//
-//$length = 0;
-//while (!feof($file)) {
-//    $data = fread($file, 1024);
-//
-//    echo $decipher->decrypt($data);
-//}
+$content = explode("\r\n===================\r\n", file_get_contents('input.log'));
+
+foreach ($content as $value) {
+    var_dump($encipher->decrypt($value));
+}
+
+
 
 //$socket = stream_socket_client('tcp://14.215.177.38:80');
 //$socket = stream_socket_client('tcp://45.120.159.61:8043');
-$socket = stream_socket_client('tcp://127.0.0.1:8080');
+//$socket = stream_socket_client('tcp://127.0.0.1:8080');
+//
+//$req = new \Ant\Http\Request('GET', 'http://blog.csdn.net/shagoo/article/details/6396089');
+//
+//$port = file_get_contents('test.log');
+//
+//$header = chr(3) . chr(strlen('blog.csdn.net')) . 'blog.csdn.net' . $port;
+//
+//fwrite($socket, $encipher->encrypt($header . $req));
+//
+//stream_set_blocking($socket, false);
+//
+//$readStream = [$socket];
+//
+//$length = 0;
+//
+//while (true) {
+//    if (false === @stream_select($readStream, $writeStream, $except, null)) {
+//        continue;
+//    }
+//
+//    foreach ($readStream as $stream) {
+//        $data = stream_get_contents($stream);
+//
+////        $length += strlen($data);
+//
+////        var_dump(strlen($data));
+//        echo $encipher->decrypt($data);
+//    }
+//}
 
-$req = new \Ant\Http\Request('GET', 'http://blog.csdn.net/shagoo/article/details/6396089');
-
-$port = file_get_contents('test.log');
-
-$header = 0x03 . chr(strlen('blog.csdn.net')) . 'blog.csdn.net' . $port;
-
-fwrite($socket, $encipher->encrypt($header . $req));
-
-stream_set_blocking($socket, false);
-
-$readStream = [$socket];
-
-$length = 0;
-
-while (true) {
-    if (false === @stream_select($readStream, $writeStream, $except, null)) {
-        continue;
-    }
-
-    $data = stream_get_contents($socket);
-
-    $length += strlen($data);
-
-    var_dump($length);
-    $data = $encipher->decrypt($data);
-}
 
 //function _sort($array)
 //{
