@@ -98,15 +98,15 @@ class StreamEncryption
             return $buffer;
         }
 
-        $result = $this->encipher->encrypt($buffer);
+        $result = '';
 
         // 第一次发送时添加iv
         if (!$this->ivSent) {
             $this->ivSent = true;
-            $result = $this->encipher->getIv() . $result;
+            $result = $this->encipher->getIv();
         }
 
-        return $result;
+        return $result . $this->encipher->encrypt($buffer);
     }
 
     /**
@@ -131,16 +131,6 @@ class StreamEncryption
         }
 
         return $this->decipher->decrypt($buffer);
-    }
-
-    protected function toBytes($buffer)
-    {
-        $bytes = [];
-        for ($i = 0; $i < strlen($buffer); $i++) {
-            $bytes[] = ord($buffer{$i});
-        }
-
-        return $bytes;
     }
 
     /**

@@ -32,6 +32,7 @@ class TcpRelayHandle
      * @var Socket
      */
     protected $remoteSocket;
+    protected $remoteAddress;
 
     public function __construct(
         TcpConnector $connector,
@@ -42,7 +43,8 @@ class TcpRelayHandle
         $this->dns = $dns;
         $this->clientSocket = $clientSocket;
 
-        $this->clientSocket->once('data', [$this, 'handleClientData']);
+        $this->clientSocket->on('data', [$this, 'handleClientData']);
+        $this->clientSocket->on('close', [$this, 'handleClose']);
     }
 
     public function handleClientData($data)
@@ -54,8 +56,7 @@ class TcpRelayHandle
                 $this->writeToRemote($data);
             }
         } catch (\Throwable $e) {
-            // todo logging
-            // todo handle exception
+            $this->handleError($e);
         }
     }
 
@@ -64,24 +65,52 @@ class TcpRelayHandle
         $headerResult = $this->parseHeader($data);
 
         if (!$headerResult) {
-            throw new \RuntimeException();
+            throw new \RuntimeException('header parse error');
         }
 
-        list($addressType, $hostname, $port, $headerLength) = $headerResult;
+        list($addressType, $host, $port, $headerLength) = $headerResult;
+
+        if (empty($host) || empty($port)) {
+            $this->clientSocket->close();
+            return;
+        }
 
         $data = substr($data, $headerLength);
 
         // todo 取消dns
-        $this->resolveHostname($addressType, $hostname)
+        $this->resolveHostname($addressType, $host)
             ->then(function ($address) use ($port) {
+                $this->remoteAddress = $address;
                 return $this->createSocketForAddress($address, $port);
-            })
+            }, [$this, 'handleError'])
             ->then(function (Socket $socket) use ($data) {
                 $this->remoteSocket = $socket;
+
                 $this->remoteSocket->on('data', [$this, 'handleRemoteData']);
+                $this->remoteSocket->on('close', [$this, 'handleClose']);
+
                 $this->stage = self::STAGE_STREAM;
                 $this->writeToRemote($data);
             });
+    }
+
+    public function handleError(\Throwable $e)
+    {
+        // todo logging
+        // todo handle exception
+        echo "ERROR: error code:{$e->getCode()} msg: {$e->getMessage()}\n";
+        $this->clientSocket->end();
+    }
+
+    public function handleClose()
+    {
+        echo 'CLOSE: connection close', PHP_EOL;
+
+        $this->clientSocket->end();
+
+        if ($this->remoteSocket) {
+            $this->remoteSocket->close();
+        }
     }
 
     public function writeToRemote($data)
@@ -91,10 +120,6 @@ class TcpRelayHandle
 
     public function handleRemoteData($data)
     {
-        file_put_contents('output.log', $data, FILE_APPEND);
-        file_put_contents('output.log', "\r\n===================\r\n", FILE_APPEND);
-
-
         $this->clientSocket->write($data);
     }
 
@@ -111,13 +136,15 @@ class TcpRelayHandle
         $port = '';
         $headerLength = 0;
 
+        // todo header parse error
+        var_dump($data);
         // 转换为16进制
         switch ($addressType & self::ADDRTYPE_MASK) {
             // 4-byte的ipv4地址
             case self::ADDRTYPE_IPV4:
                 $headerLength = 7;
                 if (strlen($data) >= $headerLength) {
-                    $address = substr($data, 1, 4);
+                    $address = join('.', $this->toBytes(substr($data, 1, 4)));
                     $port = substr($data, 5, 2);
                 }
                 break;
@@ -136,6 +163,7 @@ class TcpRelayHandle
                 break;
             // 16-byte的ipv6地址,暂不支持ipv6地址
             case self::ADDRTYPE_IPV6:
+                throw new \InvalidArgumentException('ipv6 error');
                 break;
         }
 
@@ -144,6 +172,16 @@ class TcpRelayHandle
         }
 
         return [$addressType, $address, unpack('n*', $port)[1], $headerLength];
+    }
+
+    protected function toBytes($buffer)
+    {
+        $bytes = [];
+        for ($i = 0; $i < strlen($buffer); $i++) {
+            $bytes[] = ord($buffer{$i});
+        }
+
+        return $bytes;
     }
 
     /**

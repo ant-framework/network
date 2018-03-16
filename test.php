@@ -1,49 +1,60 @@
 <?php
 include "vendor/autoload.php";
 
-$encipher = new \Ant\Network\Shadowsocks\StreamEncryption('123', 'aes-256-cfb');
-//$encipher = new Encryptor('123', 'aes-256-cfb');
+//$encipher = new \Ant\Network\Shadowsocks\StreamEncryption('qwe!123', 'aes-256-cfb');
+$decipher = new \Ant\Network\Shadowsocks\StreamEncryption('qwe!123', 'aes-256-cfb');
+//$decipher = new Encryptor('qwe!123', 'aes-256-cfb');
+$encipher = new Encryptor('qwe!123', 'aes-256-cfb');
 
-$content = explode("\r\n===================\r\n", file_get_contents('input.log'));
-
-foreach ($content as $value) {
-    var_dump($encipher->decrypt($value));
-}
-
-
+//$data = file_get_contents('origin.log');
+//
+//$buffer = '';
+//foreach ([1, 2, 3, 4, 5, 6, 7 ,8, 9] as $value) {
+//    $buffer .= $encipher->encrypt($data);
+//}
+//
+//var_dump($decipher->decrypt($buffer));die;
 
 //$socket = stream_socket_client('tcp://14.215.177.38:80');
-//$socket = stream_socket_client('tcp://45.120.159.61:8043');
-//$socket = stream_socket_client('tcp://127.0.0.1:8080');
-//
-//$req = new \Ant\Http\Request('GET', 'http://blog.csdn.net/shagoo/article/details/6396089');
-//
-//$port = file_get_contents('test.log');
-//
-//$header = chr(3) . chr(strlen('blog.csdn.net')) . 'blog.csdn.net' . $port;
-//
-//fwrite($socket, $encipher->encrypt($header . $req));
-//
-//stream_set_blocking($socket, false);
-//
-//$readStream = [$socket];
-//
-//$length = 0;
-//
-//while (true) {
-//    if (false === @stream_select($readStream, $writeStream, $except, null)) {
-//        continue;
-//    }
-//
-//    foreach ($readStream as $stream) {
-//        $data = stream_get_contents($stream);
-//
-////        $length += strlen($data);
-//
-////        var_dump(strlen($data));
-//        echo $encipher->decrypt($data);
-//    }
-//}
+//$socket = stream_socket_client('tcp://45.32.20.243:8531');
+$socket = stream_socket_client('tcp://127.0.0.1:8080');
+
+//$url = 'https://sp0.baidu.com/5a1Fazu8AA54nxGko9WTAnF6hhy/su?wd=&json=1&p=3&sid=1434_25549_21088_17001_22075&req=2&csor=0&cb=jQuery110204802594471653818_1521107741110&_=1521107741111';
+$url = 'http://zhihu.com/';
+
+$host = parse_url($url, PHP_URL_HOST);
+
+$req = new \Ant\Http\Request('GET', $url, [
+]);
+
+$port = file_get_contents('test.log');
+
+$header = chr(3) . chr(strlen($host)) . $host . $port;
+
+fwrite($socket, $encipher->encrypt($header . $req));
+
+stream_set_blocking($socket, false);
+
+$readStream = [$socket];
+
+$length = 0;
+
+while (true) {
+    if (false === @stream_select($readStream, $writeStream, $except, null)) {
+        continue;
+    }
+
+    foreach ($readStream as $stream) {
+        $data = stream_get_contents($stream);
+
+        if ($data === '') {
+            echo 'close', PHP_EOL;
+            fclose($stream);die;
+        }
+
+        echo $encipher->decrypt($data);
+    }
+}
 
 
 //function _sort($array)

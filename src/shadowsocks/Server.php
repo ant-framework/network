@@ -61,13 +61,6 @@ class Server implements EventEmitterInterface
      */
     public function handleConnection($connection)
     {
-        static $first = true;
-
-        if ($first === false) {
-            return;
-        }
-        $first = false;
-
         $socket = new Connection($connection, $this->loop, $this->options);
 
         new TcpRelayHandle($this->connector, $this->dns, $socket);

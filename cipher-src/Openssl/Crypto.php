@@ -17,13 +17,15 @@ class Crypto implements CipherInterface
 
     protected $key;
 
-    protected $iv;
-
     protected $options;
 
-    protected $fmt;
-
     protected $ivLength;
+    // todo 解决iv公用的问题
+    protected $iv;
+
+    protected $encryptTail = '';
+
+    protected $decryptTail = '';
 
     /**
      * Openssl constructor.
@@ -100,18 +102,38 @@ class Crypto implements CipherInterface
      */
     public function encrypt($data, $key = null, $iv = null)
     {
-        if (is_null($key)) {
-            $key = $this->key;
+        if (strlen($data) == 0)
+            return '';
+        $tl = strlen($this->encryptTail);
+        if ($tl)
+            $data = $this->encryptTail . $data;
+        $b = openssl_encrypt($data, $this->method, $this->key, OPENSSL_RAW_DATA, $this->iv);
+        $result = substr($b, $tl);
+        $dataLength = strlen($data);
+        $mod = $dataLength % $this->ivLength;
+        if ($dataLength >= $this->ivLength) {
+            $iPos = -($mod + $this->ivLength);
+            $this->iv = substr($b, $iPos, $this->ivLength);
         }
+        $this->encryptTail = $mod!=0 ? substr($data, -$mod):'';
+        return $result;
 
-        if (is_null($iv)) {
-            $iv = $this->iv;
-        }
-
-        return openssl_encrypt($data, $this->method, $key, $this->options, $iv);
+//        if (strlen($data) <= 0) {
+//            return '';
+//        }
+//
+//        if (is_null($key)) {
+//            $key = $this->key;
+//        }
+//
+//        if (is_null($iv)) {
+//            $iv = $this->iv;
+//        }
+//
+//        list($result, $this->encryptTail, $this->iv) = $this->update($data, $key, $iv, 'openssl_encrypt', $this->encryptTail);
+//
+//        return $result;
     }
-
-    protected $tail;
 
     /**
      * @param $data
@@ -121,39 +143,59 @@ class Crypto implements CipherInterface
      */
     public function decrypt($data, $key = null, $iv = null)
     {
-        if (strlen($data) <= 0) {
+        if (strlen($data) == 0)
             return '';
+        $tl = strlen($this->decryptTail);
+        if ($tl)
+            $data = $this->decryptTail . $data;
+        $b = openssl_decrypt($data, $this->method, $this->key, OPENSSL_RAW_DATA, $this->iv);
+        $result = substr($b, $tl);
+        $dataLength = strlen($data);
+        $mod = $dataLength%$this->ivLength;
+        if ($dataLength >= $this->ivLength) {
+            $iPos = -($mod + $this->ivLength);
+            $this->iv = substr($data, $iPos, $this->ivLength);
+        }
+        $this->decryptTail = $mod!=0 ? substr($data, -$mod):'';
+        return $result;
+//        if (strlen($data) <= 0) {
+//            return '';
+//        }
+//
+//        if (is_null($key)) {
+//            $key = $this->key;
+//        }
+//
+//        if (is_null($iv)) {
+//            $iv = $this->iv;
+//        }
+//
+//        list($result, $this->decryptTail, $this->iv) = $this->update($data, $key, $iv, 'openssl_decrypt', $this->decryptTail);
+//
+//        return $result;
+    }
+
+    protected function update($data, $key, $iv, callable $handle, $tail = null)
+    {
+        $ivLength = $this->getIvLength();
+        $tailLength = strlen($tail);
+
+        if ($tail) {
+            $data = $tail . $data;
         }
 
-        if (is_null($key)) {
-            $key = $this->key;
-        }
-
-        if (is_null($iv)) {
-            $iv = $this->iv;
-            $ivLength = $this->ivLength;
-        } else {
-            $ivLength = strlen($iv);
-        }
-
-        $tl = strlen($this->tail);
-
-        if ($this->tail) {
-            $data = $this->tail . $data;
-        }
-
-        $result = openssl_decrypt($data, $this->method, $key, $this->options, $iv);
-        $result = substr($result, $tl);
+        $result = call_user_func_array($handle, [$data, $this->method, $key, $this->options, $iv]);
+        $result = substr($result, $tailLength);
         $dataLength = strlen($data);
         $mod = $dataLength % $ivLength;
 
         if ($dataLength >= $ivLength) {
             $iPos = -($mod + $ivLength);
-            $this->iv = substr($data, $iPos, $ivLength);
+            $iv = substr($data, $iPos, $ivLength);
         }
 
-        $this->tail = $mod != 0 ? substr($data, -$mod) : '';
+        $tail = $mod != 0 ? substr($data, -$mod) : '';
 
-        return $result;
+        return [$result, $tail, $iv];
     }
 }

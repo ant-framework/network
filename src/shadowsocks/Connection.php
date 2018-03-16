@@ -124,8 +124,11 @@ class Connection extends EventEmitter implements ConnectionInterface
             $this->loop->cancelTimer($this->timer);
         }
 
+        if ($this->cryptor) {
+            unset($this->cryptor);
+        }
+
         $this->conn->close();
-        unset($this->cryptor);
     }
 
     public function getRemoteAddress()
