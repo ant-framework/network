@@ -1,9 +1,8 @@
 <?php
 namespace Ant\Network\Shadowsocks;
 
-use Ant\Crypt\CipherInterface;
 use InvalidArgumentException;
-use Ant\Crypt\Openssl\Crypto;
+use Ant\Network\Shadowsocks\Crypto\Openssl;
 
 class StreamEncryption
 {
@@ -44,14 +43,8 @@ class StreamEncryption
      */
     protected $method;
 
-    /**
-     * @var CipherInterface
-     */
     protected $encipher;
 
-    /**
-     * @var CipherInterface
-     */
     protected $decipher;
 
     /**
@@ -59,16 +52,16 @@ class StreamEncryption
      */
     protected $methods = [
         // openssl 加密
-        'aes-128-ctr'       =>  [16, 16, Crypto::class],
-        'aes-192-ctr'       =>  [24, 16, Crypto::class],
-        'aes-256-ctr'       =>  [32, 16, Crypto::class],
-        'aes-128-cfb'       =>  [16, 16, Crypto::class],
-        'aes-192-cfb'       =>  [24, 16, Crypto::class],
-        'aes-256-cfb'       =>  [32, 16, Crypto::class],
-        'camellia-128-cfb'  =>  [16, 16, Crypto::class],
-        'camellia-192-cfb'  =>  [24, 16, Crypto::class],
-        'camellia-256-cfb'  =>  [32, 16, Crypto::class],
-        'chacha20-ietf'     =>  [32, 12, Crypto::class],
+        'aes-128-ctr'       =>  [16, 16, Openssl::class],
+        'aes-192-ctr'       =>  [24, 16, Openssl::class],
+        'aes-256-ctr'       =>  [32, 16, Openssl::class],
+        'aes-128-cfb'       =>  [16, 16, Openssl::class],
+        'aes-192-cfb'       =>  [24, 16, Openssl::class],
+        'aes-256-cfb'       =>  [32, 16, Openssl::class],
+        'camellia-128-cfb'  =>  [16, 16, Openssl::class],
+        'camellia-192-cfb'  =>  [24, 16, Openssl::class],
+        'camellia-256-cfb'  =>  [32, 16, Openssl::class],
+        'chacha20-ietf'     =>  [32, 12, Openssl::class],
     ];
 
     public function __construct($password, $method = 'aes-128-cfb')
@@ -82,7 +75,7 @@ class StreamEncryption
         $this->methodInfo = $this->methods[$method];
 
         $this->encipher = $this->getCipher(
-            $method, $password,
+            $method, $password, true,
             $this->randomStr($this->methodInfo[self::METHOD_INFO_IV_LEN])
         );
     }
@@ -106,7 +99,7 @@ class StreamEncryption
             $result = $this->encipher->getIv();
         }
 
-        return $result . $this->encipher->encrypt($buffer);
+        return $result . $this->encipher->update($buffer);
     }
 
     /**
@@ -125,12 +118,12 @@ class StreamEncryption
             list(, $ivLen) = $this->methodInfo;
 
             $iv = substr($buffer, 0, $ivLen);
-            $this->decipher = $this->getCipher($this->method, $this->password, $iv);
+            $this->decipher = $this->getCipher($this->method, $this->password, false, $iv);
 
             $buffer = substr($buffer, $ivLen);
         }
 
-        return $this->decipher->decrypt($buffer);
+        return $this->decipher->update($buffer);
     }
 
     /**
@@ -147,10 +140,11 @@ class StreamEncryption
      *
      * @param $method
      * @param $password
+     * @param $isEncrypt
      * @param $iv
      * @return mixed
      */
-    protected function getCipher($method, $password, $iv)
+    protected function getCipher($method, $password, $isEncrypt, $iv)
     {
         list($keyLen, $ivLen, $crytpo) = $this->methodInfo;
 
@@ -160,7 +154,7 @@ class StreamEncryption
             $key = $password;
         }
 
-        return new $crytpo($method, $key, $iv);
+        return new $crytpo($method, $key, $isEncrypt, $iv);
     }
 
     /**

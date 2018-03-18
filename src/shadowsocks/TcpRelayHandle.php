@@ -17,9 +17,6 @@ class TcpRelayHandle
     const ADDRTYPE_AUTH = 0x10;
     const ADDRTYPE_MASK = 0xF;
 
-    const UP_STREAM_BUF_SIZE = 16 * 1024;
-    const DOWN_STREAM_BUF_SIZE = 32 * 1024;
-
     protected $stage = self::STAGE_CONNECTING;
 
     protected $loop;
@@ -62,13 +59,7 @@ class TcpRelayHandle
 
     public function handleStageConnecting($data)
     {
-        $headerResult = $this->parseHeader($data);
-
-        if (!$headerResult) {
-            throw new \RuntimeException('header parse error');
-        }
-
-        list($addressType, $host, $port, $headerLength) = $headerResult;
+        list($addressType, $host, $port, $headerLength) = $this->parseHeader($data);
 
         if (empty($host) || empty($port)) {
             $this->clientSocket->close();
@@ -137,7 +128,6 @@ class TcpRelayHandle
         $headerLength = 0;
 
         // todo header parse error
-        var_dump($data);
         // 转换为16进制
         switch ($addressType & self::ADDRTYPE_MASK) {
             // 4-byte的ipv4地址
@@ -168,7 +158,7 @@ class TcpRelayHandle
         }
 
         if (!$address) {
-            return false;
+            throw new \RuntimeException('header parse error');
         }
 
         return [$addressType, $address, unpack('n*', $port)[1], $headerLength];
