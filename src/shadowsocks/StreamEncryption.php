@@ -4,6 +4,12 @@ namespace Ant\Network\Shadowsocks;
 use InvalidArgumentException;
 use Ant\Network\Shadowsocks\Crypto\Openssl;
 
+/**
+ * todo 更多的加密方式
+ *
+ * Class StreamEncryption
+ * @package Ant\Network\Shadowsocks
+ */
 class StreamEncryption
 {
     const METHOD_INFO_KEY_LEN = 0;
@@ -43,8 +49,14 @@ class StreamEncryption
      */
     protected $method;
 
+    /**
+     * @var
+     */
     protected $encipher;
 
+    /**
+     * @var
+     */
     protected $decipher;
 
     /**

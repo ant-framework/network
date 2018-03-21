@@ -1,0 +1,11 @@
+{
+  "dns_server" : "119.29.29.29",
+  "debug":true,
+  "servers" : [
+    {
+      "port":8080,
+      "method":"aes-256-cfb",
+      "password":"qwe!123"
+    }
+  ]
+}

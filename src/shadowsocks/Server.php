@@ -1,16 +1,14 @@
 <?php
 namespace Ant\Network\Shadowsocks;
 
+use React\Socket\LimitingServer;
+use React\Socket\TcpConnector;
 use Evenement\EventEmitterTrait;
 use React\Dns\Resolver\Resolver;
 use React\EventLoop\LoopInterface;
 use Evenement\EventEmitterInterface;
-use React\Socket\ConnectionInterface;
-use React\Socket\TcpConnector;
 use React\Socket\Server as TcpServer;
-use React\Stream\DuplexResourceStream;
-use RuntimeException;
-use InvalidArgumentException;
+use React\Stream\Util;
 
 /**
  * todo 检查必须参数
@@ -28,13 +26,7 @@ class Server implements EventEmitterInterface
 {
     use EventEmitterTrait;
 
-    protected $loop;
-
-    protected $dns;
-
-    protected $options = [];
-
-    protected $connector;
+    protected $maximumConn;
 
     /**
      * @param LoopInterface $loop
@@ -43,26 +35,16 @@ class Server implements EventEmitterInterface
      */
     public function __construct(LoopInterface $loop, Resolver $dns, array $options = [])
     {
-        $this->loop = $loop;
-        $this->dns = $dns;
-        $this->connector = new TcpConnector($this->loop);
-        $this->options = array_merge($this->options, $options);
-    }
+        TcpRelayHandle::init($dns, new TcpConnector($loop));
 
-    public function listen($uri, array $context = [])
-    {
-        $server = new TcpServer($uri, $this->loop);
+        $this->maximumConn = $options['max_connection'] ?? 1024;
 
-        $server->on('connection', [$this, "handleConnection"]);
-    }
+        $server = new LimitingServer(new TcpServer("tcp://0.0.0.0:{$options['port']}", $loop), $this->maximumConn);
 
-    /**
-     * @param $connection
-     */
-    public function handleConnection($connection)
-    {
-        $socket = new Connection($connection, $this->loop, $this->options);
+        $server->on('connection', function ($connection) use ($loop, $options) {
+            $handler = new TcpRelayHandle($connection, $loop, $options);
 
-        new TcpRelayHandle($this->connector, $this->dns, $socket);
+            Util::forwardEvents($handler, $this, ['read', 'write', 'error', 'close', 'timeout']);
+        });
     }
 }

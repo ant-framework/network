@@ -1,9 +1,9 @@
 <?php
 namespace Ant\Network\Shadowsocks;
 
-use Ant\Http\Response;
 use React\Stream\Util;
 use Evenement\EventEmitter;
+use React\EventLoop\Timer\Timer;
 use React\EventLoop\LoopInterface;
 use React\Socket\ConnectionInterface;
 use React\Stream\WritableStreamInterface;
@@ -14,14 +14,29 @@ use React\Stream\WritableStreamInterface;
  */
 class Connection extends EventEmitter implements ConnectionInterface
 {
+    /**
+     * @var LoopInterface
+     */
     protected $loop;
 
+    /**
+     * @var StreamEncryption
+     */
     protected $cryptor;
 
+    /**
+     * @var ConnectionInterface
+     */
     private $conn;
 
+    /**
+     * @var Timer
+     */
     private $timer;
 
+    /**
+     * @var integer
+     */
     private $keepAliveTime;
 
     /**
@@ -39,6 +54,7 @@ class Connection extends EventEmitter implements ConnectionInterface
 
         Util::forwardEvents($conn, $this, ['end', 'error', 'close', 'pipe', 'drain']);
 
+        $this->conn->on('close', [$this, 'close']);
         $this->conn->on('data', function ($chunk) {
             $this->emit('data', [$this->cryptor->decrypt($chunk), $this]);
         });
@@ -104,15 +120,17 @@ class Connection extends EventEmitter implements ConnectionInterface
 
     public function write($data)
     {
+        if (!$this->isWritable()) {
+             return false;
+        }
+
         $data = $this->cryptor->encrypt($data);
 
-        $this->conn->write($data);
+        return $this->conn->write($data);
     }
 
     public function end($data = null)
     {
-        $data = $this->cryptor->encrypt($data);
-
         $this->conn->end($data);
     }
 
@@ -125,7 +143,7 @@ class Connection extends EventEmitter implements ConnectionInterface
         }
 
         if ($this->cryptor) {
-            unset($this->cryptor);
+            $this->cryptor = null;
         }
 
         $this->conn->close();

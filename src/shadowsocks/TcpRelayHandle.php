@@ -2,11 +2,14 @@
 namespace Ant\Network\Shadowsocks;
 
 use React\Promise;
+use Evenement\EventEmitter;
 use React\Socket\TcpConnector;
 use React\Dns\Resolver\Resolver;
+use React\EventLoop\LoopInterface;
+use React\Socket\ConnectionInterface;
 use React\Socket\Connection as Socket;
 
-class TcpRelayHandle
+class TcpRelayHandle extends EventEmitter
 {
     const STAGE_CONNECTING = 1;
     const STAGE_STREAM = 2;
@@ -17,46 +20,81 @@ class TcpRelayHandle
     const ADDRTYPE_AUTH = 0x10;
     const ADDRTYPE_MASK = 0xF;
 
+    /**
+     * @var int
+     */
     protected $stage = self::STAGE_CONNECTING;
 
-    protected $loop;
-
-    protected $dns;
-
+    /**
+     * @var Connection
+     */
     protected $clientSocket;
 
     /**
      * @var Socket
      */
     protected $remoteSocket;
-    protected $remoteAddress;
 
-    public function __construct(
-        TcpConnector $connector,
-        Resolver $dns,
-        Connection $clientSocket
-    ) {
-        $this->connector = $connector;
-        $this->dns = $dns;
-        $this->clientSocket = $clientSocket;
+    /**
+     * @var bool
+     */
+    protected static $init = false;
 
-        $this->clientSocket->on('data', [$this, 'handleClientData']);
-        $this->clientSocket->on('close', [$this, 'handleClose']);
+    /**
+     * @var Resolver
+     */
+    protected static $dns;
+
+    /**
+     * @var TcpConnector
+     */
+    protected static $connector;
+
+    /**
+     * 初始化异步dns
+     *
+     * @param Resolver $dns
+     * @param TcpConnector $connector
+     */
+    public static function init(Resolver $dns, TcpConnector $connector)
+    {
+        self::$dns = $dns;
+        self::$connector = $connector;
     }
 
+    public function __construct(ConnectionInterface $conn, LoopInterface $loop, array $options)
+    {
+        $clientSocket = new Connection($conn, $loop, $options);
+        $clientSocket->on('data', [$this, 'handleClientData']);
+        $clientSocket->on('close', [$this, 'handleClose']);
+        $clientSocket->setTimeout($options['timeout'] ?? 30, [$this, 'handleTimeout']);
+
+        $this->clientSocket = $clientSocket;
+    }
+
+    /**
+     * 处理客户端数据
+     *
+     * @param $data
+     */
     public function handleClientData($data)
     {
         try {
             if ($this->stage === self::STAGE_CONNECTING) {
                 $this->handleStageConnecting($data);
             } elseif ($this->stage === self::STAGE_STREAM) {
-                $this->writeToRemote($data);
+                $this->remoteSocket->write($data);
             }
         } catch (\Throwable $e) {
             $this->handleError($e);
         }
     }
 
+    /**
+     * 解析客户端目标并与其建立连接
+     *
+     * @param $data
+     */
     public function handleStageConnecting($data)
     {
         list($addressType, $host, $port, $headerLength) = $this->parseHeader($data);
@@ -66,36 +104,52 @@ class TcpRelayHandle
             return;
         }
 
+        // 暂停读取客户端数据,直到远程连接建立
+        $this->clientSocket->pause();
         $data = substr($data, $headerLength);
 
-        // todo 取消dns
-        $this->resolveHostname($addressType, $host)
+        $this
+            ->resolveHostname($addressType, $host)
             ->then(function ($address) use ($port) {
-                $this->remoteAddress = $address;
                 return $this->createSocketForAddress($address, $port);
             }, [$this, 'handleError'])
             ->then(function (Socket $socket) use ($data) {
+                $socket->once('close', [$this, 'handleClose']);
+                $socket->on('data', [$this, 'handleRemoteData']);
+
                 $this->remoteSocket = $socket;
+                $this->remoteSocket->write($data);
 
-                $this->remoteSocket->on('data', [$this, 'handleRemoteData']);
-                $this->remoteSocket->on('close', [$this, 'handleClose']);
-
+                // 在于远程建立连接之后再继续读取客户端内容
+                $this->clientSocket->resume();
                 $this->stage = self::STAGE_STREAM;
-                $this->writeToRemote($data);
-            });
+            }, [$this, 'handleError']);
     }
 
+    /**
+     * @param $data
+     */
+    public function handleRemoteData($data)
+    {
+        $this->clientSocket->write($data);
+    }
+
+    /**
+     * @param \Throwable $e
+     */
     public function handleError(\Throwable $e)
     {
-        // todo logging
-        // todo handle exception
-        echo "ERROR: error code:{$e->getCode()} msg: {$e->getMessage()}\n";
-        $this->clientSocket->end();
+        $this->emit('error', [$e]);
+
+        $this->handleClose();
     }
 
+    /**
+     * 关闭连接
+     */
     public function handleClose()
     {
-        echo 'CLOSE: connection close', PHP_EOL;
+        $this->emit('close');
 
         $this->clientSocket->end();
 
@@ -104,14 +158,10 @@ class TcpRelayHandle
         }
     }
 
-    public function writeToRemote($data)
+    public function handleTimeout()
     {
-        $this->remoteSocket->write($data);
-    }
-
-    public function handleRemoteData($data)
-    {
-        $this->clientSocket->write($data);
+        $this->emit('timeout');
+        $this->handleClose();
     }
 
     /**
@@ -127,7 +177,6 @@ class TcpRelayHandle
         $port = '';
         $headerLength = 0;
 
-        // todo header parse error
         // 转换为16进制
         switch ($addressType & self::ADDRTYPE_MASK) {
             // 4-byte的ipv4地址
@@ -155,6 +204,8 @@ class TcpRelayHandle
             case self::ADDRTYPE_IPV6:
                 throw new \InvalidArgumentException('ipv6 error');
                 break;
+            default:
+                throw new \InvalidArgumentException("unsupported address type {$addressType}");
         }
 
         if (!$address) {
@@ -164,6 +215,10 @@ class TcpRelayHandle
         return [$addressType, $address, unpack('n*', $port)[1], $headerLength];
     }
 
+    /**
+     * @param $buffer
+     * @return array
+     */
     protected function toBytes($buffer)
     {
         $bytes = [];
@@ -175,7 +230,7 @@ class TcpRelayHandle
     }
 
     /**
-     * 解析dns todo 处理未解析成功的域名
+     * 解析dns
      *
      * @param $addressType
      * @param $host
@@ -184,14 +239,14 @@ class TcpRelayHandle
     protected function resolveHostname($addressType, $host)
     {
         if (self::ADDRTYPE_HOST === ($addressType & self::ADDRTYPE_MASK)) {
-            return $this->dns->resolve($host);
+            return self::$dns->resolve($host);
         }
 
         return Promise\resolve($host);
     }
 
     /**
-     * todo 处理连接失败
+     * 连接远程目标
      *
      * @param $address
      * @param $port
@@ -199,7 +254,7 @@ class TcpRelayHandle
      */
     protected function createSocketForAddress($address, $port)
     {
-        return $this->connector->connect($this->getSocketUrl($address, $port));
+        return self::$connector->connect($this->getSocketUrl($address, $port));
     }
 
     /**
