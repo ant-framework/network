@@ -11,14 +11,6 @@ use React\Socket\Server as TcpServer;
 use React\Stream\Util;
 
 /**
- * todo 检查必须参数
- * required
- *  server_addr
- *  server_port
- *  timeout
- *  password
- *  method
- *
  * Class Server
  * @package Ant\Network\Shadowsocks
  */
@@ -26,7 +18,7 @@ class Server implements EventEmitterInterface
 {
     use EventEmitterTrait;
 
-    protected $maximumConn;
+    protected $server;
 
     /**
      * @param LoopInterface $loop
@@ -37,14 +29,28 @@ class Server implements EventEmitterInterface
     {
         TcpRelayHandle::init($dns, new TcpConnector($loop));
 
-        $this->maximumConn = $options['max_connection'] ?? 1024;
+        $maximumConn = $options['max_connection'] ?? 1024;
 
-        $server = new LimitingServer(new TcpServer("tcp://0.0.0.0:{$options['port']}", $loop), $this->maximumConn);
+        $this->server = new LimitingServer(new TcpServer("tcp://0.0.0.0:{$options['port']}", $loop), $maximumConn);
 
-        $server->on('connection', function ($connection) use ($loop, $options) {
+        $this->server->on('connection', function ($connection) use ($loop, $options) {
             $handler = new TcpRelayHandle($connection, $loop, $options);
 
             Util::forwardEvents($handler, $this, ['read', 'write', 'error', 'close', 'timeout']);
         });
+    }
+
+    /**
+     * @param $name
+     * @param $arguments
+     * @return mixed
+     */
+    public function __call($name, $arguments)
+    {
+        if (!method_exists($this->server, $name)) {
+            throw new \RuntimeException();
+        }
+
+        return call_user_func_array($name, $arguments);
     }
 }

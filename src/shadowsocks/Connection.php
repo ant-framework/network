@@ -55,9 +55,17 @@ class Connection extends EventEmitter implements ConnectionInterface
         Util::forwardEvents($conn, $this, ['end', 'error', 'close', 'pipe', 'drain']);
 
         $this->conn->on('close', [$this, 'close']);
-        $this->conn->on('data', function ($chunk) {
-            $this->emit('data', [$this->cryptor->decrypt($chunk), $this]);
-        });
+        $this->conn->on('data', [$this, 'handleData']);
+    }
+
+    /**
+     * @param $chunk
+     */
+    public function handleData($chunk)
+    {
+        $this->setKeepAliveTime();
+
+        $this->emit('data', [$this->cryptor->decrypt($chunk), $this]);
     }
 
     /**

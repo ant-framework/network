@@ -6,6 +6,11 @@
       "port":8080,
       "method":"aes-256-cfb",
       "password":"qwe!123"
+    },
+    {
+      "port":8531,
+      "method":"aes-128-cfb",
+      "password":"qwe!123"
     }
   ]
 }
