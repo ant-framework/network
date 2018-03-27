@@ -6,6 +6,7 @@ use React\EventLoop\Factory as LoopFactory;
 use React\Dns\Resolver\Factory as DnsFactory;
 
 /**
+ * todo 使用swoole实现
  * todo 检查必须参数
  * required
  *  server_addr
@@ -33,6 +34,7 @@ class Application
     public function __construct($basePath)
     {
         $this->basePath = $basePath;
+        $this->loop = LoopFactory::create();
     }
 
     public function getConfig()
@@ -79,6 +81,9 @@ class Application
 
     public function start()
     {
+        $this->checkSapiEnv();
+        $this->parseCommand();
+
         // todo worker manager
         $dns = $this->getDnsResolver();
 
@@ -89,11 +94,6 @@ class Application
         $this->loop->addPeriodicTimer(5, [$this, 'checkMemory']);
 
         $this->loop->run();
-    }
-
-    protected function initLoop()
-    {
-        $this->loop = LoopFactory::create();
     }
 
     protected function getDnsResolver()
