@@ -3,8 +3,49 @@
 
 require __DIR__ . "/../vendor/autoload.php";
 
-$app = new Ant\Network\Shadowsocks\Application(
-    realpath(__DIR__ . '/../')
-);
+$server = new Swoole\Server('0.0.0.0', 8080);
 
-$app->start();
+$server->on('start', function () {
+    swoole_async_dns_lookup("baidu.com", function ($host, $ip) {
+        $client = new Swoole\Client(SWOOLE_TCP, SWOOLE_SOCK_ASYNC);
+
+        $client->on("connect", function($client) {
+            $request = new \Ant\Http\Request('GET', 'http://baidu.com');
+
+            $client->send((string) $request);
+        });
+
+        $client->on("close", function($cli){
+//            $cli->close(); // 1.6.10+ 不需要
+            echo "close\n";
+        });
+
+        $client->on("error", function($client){
+            echo socket_strerror($client->errCode);
+        });
+
+        $client->on('receive', function ($client, $data) {
+            $data = $client->recv(); //1.6.10+ 不需要
+            if(empty($data)){
+                $client->close();
+                echo "closed\n";
+            } else {
+                var_dump($data);
+            }
+        });
+
+        var_dump($ip, 80);
+        $client->connect($ip, 80);
+    });
+});
+
+$server->on('receive', function () {});
+
+$server->start();
+
+//
+//$app = new Ant\Network\Shadowsocks\Application(
+//    realpath(__DIR__ . '/../')
+//);
+//
+//$app->start();

@@ -1,30 +1,54 @@
 <?php
 require 'vendor/autoload.php';
 
-ini_set("memory_limit", "512M");
+$client = new Swoole\Client(SWOOLE_TCP | SWOOLE_ASYNC); //异步非阻塞
 
-$host = "https://sp0.baidu.com/5a1Fazu8AA54nxGko9WTAnF6hhy/su?wd=&json=1&p=3&sid=1434_25549_21088_17001_22075&req=2&csor=0&cb=jQuery110204802594471653818_1521107741110&_=1521107741111";
+$client->on("connect", function($cli) {
+//    $request = new \Ant\Http\Request('GET', 'http://www.baidu.com', ['accept' => 'text/html']);
+//    $data = (string) $request;
+//    $cli->send($data);
+    $cli->send(12);
+});
 
-$client = stream_socket_client("tcp://127.0.0.1:80");
+$client->on("receive", function($cli, $data = ""){
+    var_dump($data);
+});
 
-$request = new \Ant\Http\Request('GET', "http://127.0.0.1/test.php");
+$client->on("close", function($cli){
+    echo "close\n";
+});
 
-$request = $request->withHeaders([
-    'Content-Type'  =>  'application/json',
-    'Cookie'        =>  'token=foobar',
-    'Connection'    =>  'keep-alive',
-    'Accept'        =>  'application/json',
-]);
+$client->on("error", function($cli){
+    exit("error\n");
+});
 
-fwrite($client, (string) $request);
+$client->connect('127.0.0.1', 8847, 30);
 
-echo fread($client, 8192);
 
-fwrite($client, (string) $request);
-
-fwrite($client, 'foobar');
-
-fclose($client);
+//ini_set("memory_limit", "512M");
+//
+//$host = "https://sp0.baidu.com/5a1Fazu8AA54nxGko9WTAnF6hhy/su?wd=&json=1&p=3&sid=1434_25549_21088_17001_22075&req=2&csor=0&cb=jQuery110204802594471653818_1521107741110&_=1521107741111";
+//
+//$client = stream_socket_client("tcp://127.0.0.1:80");
+//
+//$request = new \Ant\Http\Request('GET', "http://127.0.0.1/test.php");
+//
+//$request = $request->withHeaders([
+//    'Content-Type'  =>  'application/json',
+//    'Cookie'        =>  'token=foobar',
+//    'Connection'    =>  'keep-alive',
+//    'Accept'        =>  'application/json',
+//]);
+//
+//fwrite($client, (string) $request);
+//
+//echo fread($client, 8192);
+//
+//fwrite($client, (string) $request);
+//
+//fwrite($client, 'foobar');
+//
+//fclose($client);
 
 // 保持不变性测试,性能,内存消耗
 //$response = new \Ant\Http\Response();
